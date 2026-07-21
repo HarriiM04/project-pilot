@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
 import { SYSTEM_PROMPT_DISCOVERY, buildDiscoveryTurnPrompt } from '@/lib/prompts/discovery'
 import type { DiscoveryTurnResponse, DiscoveryState } from '@/lib/types'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -45,9 +46,31 @@ export async function POST(req: NextRequest) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const { messages, projectId } = (await req.json()) as {
-    messages: { role: string; content: string }[]
-    projectId: string
+  if (!checkRateLimit(user.id, 30, 60000)) {
+    return new Response('Rate limit exceeded', { status: 429 })
+  }
+
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return new Response('Invalid JSON', { status: 400 })
+  }
+
+  const { messages, projectId } = body
+  
+  if (!projectId || typeof projectId !== 'string') {
+    return new Response('Invalid projectId', { status: 400 })
+  }
+  if (!Array.isArray(messages) || messages.length > 200) {
+    return new Response('Invalid messages', { status: 400 })
+  }
+  for (const msg of messages) {
+    if (typeof msg.role !== 'string' || typeof msg.content !== 'string') {
+      return new Response('Invalid message format', { status: 400 })
+    }
+    // basic sanitization
+    msg.content = msg.content.replace(/\u0000/g, '').substring(0, 5000)
   }
 
   // Verify project ownership and fetch uploaded documents
@@ -144,8 +167,8 @@ export async function POST(req: NextRequest) {
 
         const compatibilityState: DiscoveryState = {
           projectName: project.title || 'Untitled Discovery',
-          clientName: '',
-          domain: parsedTurn.dominant_language || 'General Software',
+          clientName: project.client_name || '',
+          domain: parsedTurn.industry_domain || project.domain || 'General Software',
           overallCompletion: completeness,
           sections: [
             { key: 'business_goals', label: 'Business Goals', completion: scoreToNum(pillarStatus.business_goals) },
@@ -154,12 +177,6 @@ export async function POST(req: NextRequest) {
             { key: 'non_functional_reqs', label: 'Non-Functional Reqs', completion: scoreToNum(pillarStatus.non_functional_reqs) },
             { key: 'constraints', label: 'Constraints & Tech Stack', completion: scoreToNum(pillarStatus.constraints) }
           ],
-          features: [],
-          brd: { objectives: [], scope: [], stakeholders: [] },
-          prd: { personas: [], goals: [], metrics: [] },
-          srs: { functional: [], nonFunctional: [] },
-          userStories: [],
-          architecture: { layers: [], integrations: [] },
           suggestedOptions: parsedTurn.suggested_quick_replies || []
         }
 
@@ -173,7 +190,8 @@ export async function POST(req: NextRequest) {
           .from('projects')
           .update({
             completeness_score: completeness,
-            dominant_language: parsedTurn.dominant_language || 'English',
+            dominant_language: parsedTurn.dominant_language || project.dominant_language || 'English',
+            domain: parsedTurn.industry_domain || project.domain || '',
             discovery_state: compatibilityState,
           })
           .eq('id', projectId)

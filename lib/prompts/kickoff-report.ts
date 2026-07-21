@@ -24,8 +24,8 @@ Using the structured requirement extraction payload provided below, generate an 
 ## 9. Risks, Assumptions & Mitigation Strategies
 ## 10. Suggested Tech Stack Architecture (Markdown Table with justifications)
 ## 11. High-Level Delivery Roadmap (Phases 1, 2, 3)
-## 12. Rough Timeline & Milestone Schedule
-## 13. Technical Complexity & Engineering Effort Analysis
+## 12. Timeline & Milestone Schedule [Agency to Complete]
+## 13. Technical Complexity & Qualitative Effort Analysis
 ## 14. Open Questions & Underspecified Decisions
 ## 15. Strategic AI Recommendations & Next Steps`
 
@@ -44,9 +44,9 @@ Using the structured extraction payload provided below, generate a comprehensive
 ## 3. Strategic Business Objectives & Expected ROI
 ## 4. Stakeholder Identification & User Role Definition (Markdown Table)
 ## 5. High-Level Functional Scope & Core Business Processes
-## 6. Cost/Benefit Analysis & Operational Risks
+## 6. Qualitative Value Analysis & Operational Risks [Agency to Complete Costing]
 ## 7. Success KPIs & Measurable Acceptance Criteria (Markdown Table)
-## 8. Next Steps, Budgetary Estimates & Sign-Off Requirements`
+## 8. Next Steps & Sign-Off Requirements [Agency to Complete Budget]`
 
 export const PRD_PROMPT = `You are an expert Principal Product Manager and UX Architect.
 Using the structured extraction payload provided below, generate a highly detailed Product Requirements Document (PRD).
@@ -59,10 +59,10 @@ Using the structured extraction payload provided below, generate a highly detail
 ### MANDATORY 8 SECTIONS:
 # Product Requirements Document (PRD): {project_title}
 ## 1. Product Overview & Value Proposition
-## 2. Target Personas & User Empathy Mapping
+## 2. Target Personas & User Empathy Mapping (Thinks / Feels / Does / Says Grid)
 ## 3. Comprehensive User Stories & Acceptance Criteria (Format: As a [user], I want [feature] so that [benefit])
 ## 4. MoSCoW Prioritization Matrix (Markdown Table of Must, Should, Could, Won't Have)
-## 5. Core User Flows & UI/UX Navigation Specifications
+## 5. Core User Flows & User Journey Maps (Persona → Touchpoints → Actions → Emotions → Pain Points)
 ## 6. Edge Cases, Error Handling & Offline Behaviors
 ## 7. Release Quality Gates & MVP Acceptance Criteria
 ## 8. Future Roadmap & Post-MVP Evolution`
@@ -86,11 +86,32 @@ Using the structured extraction payload provided below, generate an exhaustive S
 ## 7. Security, Authentication, Authorization & Data Encryption Standards
 ## 8. Deployment Architecture, Cloud Infrastructure & DevOps Pipeline Constraints`
 
+export const SOW_PROMPT = `You are a Principal Delivery Manager.
+Using the structured extraction payload provided below, generate a comprehensive Scope of Work (SOW) document.
+
+### GENERATION RULES:
+1. Output one master markdown document containing exactly the 8 SOW sections listed below.
+2. Focus strictly on defining the boundaries of the engagement, deliverables, and acceptance criteria.
+3. Generate narrative text in {detected_dominant_language}.
+4. Do NOT include any monetary cost estimates, hourly rates, or fixed timeline dates. These are business decisions handled by the agency. Label budget/timeline sections as "[Agency to Complete]".
+
+### MANDATORY 8 SECTIONS:
+# Scope of Work (SOW): {project_title}
+## 1. Project Objectives & Business Justification
+## 2. In-Scope Deliverables & Features
+## 3. Out-of-Scope Items & Exclusions
+## 4. Key Assumptions & Constraints
+## 5. Agency & Client Responsibilities
+## 6. Acceptance Criteria & Quality Gates
+## 7. Timeline & Milestone Schedule [Agency to Complete]
+## 8. Project Governance & Sign-Off [Agency to Complete Budget]`
+
 export function getPromptForDocType(docType: string, dominantLang: string, projectTitle: string): string {
   let template = KICKOFF_REPORT_PROMPT
   if (docType === 'BRD') template = BRD_PROMPT
   else if (docType === 'PRD') template = PRD_PROMPT
   else if (docType === 'SRS') template = SRS_PROMPT
+  else if (docType === 'SOW') template = SOW_PROMPT
 
   return template
     .replaceAll('{detected_dominant_language}', dominantLang || 'English')

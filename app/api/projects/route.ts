@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 /** GET /api/projects — list current user's projects */
 export async function GET() {
@@ -8,6 +9,10 @@ export async function GET() {
 
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!checkRateLimit(user.id, 60, 60000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
   }
 
   const { data, error } = await supabase
@@ -32,10 +37,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await req.json()
-  const title = (body.title as string)?.trim() || 'Untitled Project'
-  const clientName = (body.client_name as string)?.trim() || ''
-  const domain = (body.domain as string)?.trim() || ''
+  if (!checkRateLimit(user.id, 20, 60000)) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
+  let body: any
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const title = (typeof body.title === 'string' ? body.title.replace(/\u0000/g, '').trim().substring(0, 100) : '') || 'Untitled Project'
+  const clientName = (typeof body.client_name === 'string' ? body.client_name.replace(/\u0000/g, '').trim().substring(0, 100) : '')
+  const domain = (typeof body.domain === 'string' ? body.domain.replace(/\u0000/g, '').trim().substring(0, 100) : '')
 
   const { data, error } = await supabase
     .from('projects')

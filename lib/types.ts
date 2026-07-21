@@ -8,37 +8,10 @@ export interface ChatMessage {
   options?: string[]
 }
 
-export type FeaturePriority = 'must-have' | 'should-have' | 'nice-to-have'
-export type FeatureStatus = 'captured' | 'clarifying' | 'proposed'
-
-export interface FeatureItem {
-  id: string
-  name: string
-  description: string
-  priority: FeaturePriority
-  effort: 'S' | 'M' | 'L' | 'XL'
-  status: FeatureStatus
-}
-
 export interface DiscoverySection {
   key: string
   label: string
   completion: number
-}
-
-export interface UserStory {
-  id: string
-  persona: string
-  want: string
-  soThat: string
-  points: number
-}
-
-export interface RequirementRow {
-  id: string
-  code: string
-  requirement: string
-  category: string
 }
 
 export interface DiscoveryState {
@@ -47,18 +20,6 @@ export interface DiscoveryState {
   domain: string
   overallCompletion: number
   sections: DiscoverySection[]
-  features: FeatureItem[]
-  brd: { objectives: string[]; scope: string[]; stakeholders: string[] }
-  prd: { personas: string[]; goals: string[]; metrics: string[] }
-  srs: {
-    functional: RequirementRow[]
-    nonFunctional: RequirementRow[]
-  }
-  userStories: UserStory[]
-  architecture: {
-    layers: { name: string; tech: string; note: string }[]
-    integrations: string[]
-  }
   suggestedOptions?: string[]
 }
 
@@ -85,6 +46,7 @@ export interface DiscoveryTurnResponse {
   suggested_quick_replies: string[]
   assistant_reply: string
   dominant_language?: string
+  industry_domain?: string
 }
 
 export interface KickoffReport {

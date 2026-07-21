@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/app-header'
 import { AppSidebar } from '@/components/app-sidebar'
 import { DiscoveryChat } from '@/components/discovery-chat'
 import { KickoffReportViewer } from '@/components/kickoff-report-viewer'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { DiscoveryProvider, useDiscovery } from '@/lib/discovery-store'
 import { cn } from '@/lib/utils'
 
@@ -96,7 +97,9 @@ function WorkspaceInner() {
 export function WorkspaceShell({ projectId }: { projectId: string }) {
   return (
     <DiscoveryProvider projectId={projectId}>
-      <WorkspaceInner />
+      <ErrorBoundary>
+        <WorkspaceInner />
+      </ErrorBoundary>
     </DiscoveryProvider>
   )
 }

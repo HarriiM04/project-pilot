@@ -32,6 +32,42 @@ OUTPUT SCHEMA:
   "constraints_and_assumptions": [ "Constraint or assumption 1" ],
   "suggested_tech_stack": [
     { "layer": "Frontend" | "Backend" | "Database" | "Infrastructure" | "Third-Party APIs", "technology": "Recommended tech", "justification": "Why this fits the 3-day MVP or target scale" }
+  ],
+  "user_stories": [
+    { "id": "US-001", "persona": "Role", "want": "Feature", "so_that": "Benefit" }
+  ],
+  "moscow_matrix": {
+    "must_have": [ "Feature 1" ],
+    "should_have": [ "Feature 2" ],
+    "could_have": [ "Feature 3" ],
+    "wont_have_this_time": [ "Feature 4" ]
+  },
+  "feature_breakdown": {
+    "in_scope": [ "Feature A" ],
+    "out_of_scope": [ "Feature B" ]
+  },
+  "database_design": {
+    "entities": [
+      { "name": "Users", "description": "Core user table", "fields": [ "id", "email" ], "relationships": [ "One-to-Many with Orders" ] }
+    ]
+  },
+  "api_endpoints": [
+    { "method": "GET" | "POST" | "PUT" | "DELETE", "path": "/api/resource", "purpose": "Fetch resource" }
+  ],
+  "integration_recommendations": [
+    { "service": "Stripe", "purpose": "Payment processing", "justification": "Industry standard" }
+  ],
+  "user_journey_maps": [
+    { 
+      "persona": "Patient", 
+      "scenario": "Booking an appointment",
+      "steps": [
+        { "touchpoint": "Landing Page", "action": "Clicks Book", "emotion_or_pain_point": "Needs fast booking" }
+      ]
+    }
+  ],
+  "risks_and_mitigations": [
+    { "risk": "High latency on search", "probability": "Medium", "impact": "High", "mitigation": "Use Redis caching" }
   ]
 }`
 

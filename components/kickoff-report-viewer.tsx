@@ -131,7 +131,7 @@ function ReportContentFormatter({ markdown }: { markdown: string }) {
 
 export function KickoffReportViewer() {
   const { discovery, projectId, isStreaming } = useDiscovery()
-  const [docType, setDocType] = useState<'KICKOFF' | 'BRD' | 'PRD' | 'SRS'>('KICKOFF')
+  const [docType, setDocType] = useState<'KICKOFF' | 'BRD' | 'PRD' | 'SRS' | 'SOW'>('KICKOFF')
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -204,6 +204,7 @@ export function KickoffReportViewer() {
     { id: 'BRD', label: 'BRD (Business)' },
     { id: 'PRD', label: 'PRD (Product)' },
     { id: 'SRS', label: 'SRS (Technical)' },
+    { id: 'SOW', label: 'SOW (Scope)' },
   ] as const
 
   return (

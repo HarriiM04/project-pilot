@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
 import { buildExtractionPrompt } from '@/lib/prompts/extraction'
 import { getPromptForDocType } from '@/lib/prompts/kickoff-report'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -78,9 +79,21 @@ export async function POST(req: NextRequest) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const body = await req.json() as { projectId: string; docType?: string }
-    const projectId = body.projectId
-    const docType = body.docType || 'KICKOFF'
+    if (!checkRateLimit(user.id, 10, 60000)) {
+      return new Response('Rate limit exceeded', { status: 429 })
+    }
+
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return new Response('Invalid JSON', { status: 400 })
+    }
+
+    const projectId = typeof body.projectId === 'string' ? body.projectId : ''
+    const docTypeRaw = typeof body.docType === 'string' ? body.docType : 'KICKOFF'
+    const allowedDocTypes = ['KICKOFF', 'BRD', 'PRD', 'SRS', 'SOW']
+    const docType = allowedDocTypes.includes(docTypeRaw) ? docTypeRaw : 'KICKOFF'
 
     if (!projectId) return new Response('Missing projectId', { status: 400 })
 
@@ -125,8 +138,11 @@ export async function POST(req: NextRequest) {
 
     let extractedPayload: Record<string, unknown> = (existingReport?.extracted_json as any) || {}
 
+    const lastLength = (extractedPayload.last_extraction_transcript_length as number) || 0
+    const hasGrownSignificantly = transcript.length > lastLength * 1.2 || transcript.length - lastLength > 500
+
     // Only run JSON extraction if we haven't extracted yet or transcript has grown significantly
-    if (!extractedPayload.project_title || transcript.length > 500) {
+    if (!extractedPayload.project_title || hasGrownSignificantly) {
       const extractionPrompt = buildExtractionPrompt(transcript, uploadedDocsText)
       try {
         const extractionRes = await ai.models.generateContent({
@@ -135,7 +151,11 @@ export async function POST(req: NextRequest) {
           contents: [{ role: 'user', parts: [{ text: extractionPrompt }] }],
         })
         const parsed = JSON.parse(extractionRes.text || '{}')
-        extractedPayload = { ...extractedPayload, ...parsed }
+        extractedPayload = { 
+          ...extractedPayload, 
+          ...parsed,
+          last_extraction_transcript_length: transcript.length
+        }
       } catch {
         // Fallback or keep existing
         if (!extractedPayload.project_title) {

@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS public.projects (
   title            TEXT NOT NULL DEFAULT 'Untitled Project',
   client_name      TEXT NOT NULL DEFAULT '',
   domain           TEXT NOT NULL DEFAULT '',
+  dominant_language TEXT DEFAULT 'English',
+  completeness_score INTEGER DEFAULT 0,
+  uploaded_docs    JSONB DEFAULT '[]'::jsonb,
   discovery_state  JSONB,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -74,13 +77,29 @@ CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON public.projects(updated_at
 CREATE TABLE IF NOT EXISTS public.messages (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id  UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  role        TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  role        TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system_event')),
   content     TEXT NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_project_id ON public.messages(project_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at ASC);
+
+-- ── Table: kickoff_reports ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.kickoff_reports (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id       UUID UNIQUE NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  report_markdown  TEXT NOT NULL,
+  extracted_json   JSONB NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_kickoff_reports_updated_at
+  BEFORE UPDATE ON public.kickoff_reports
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE INDEX IF NOT EXISTS idx_kickoff_reports_project_id ON public.kickoff_reports(project_id);
 
 -- ============================================================
 -- Row Level Security (RLS)
@@ -148,7 +167,52 @@ CREATE POLICY "messages_delete_project_owner"
     )
   );
 
+-- ── kickoff_reports ─────────────────────────────────────────
+ALTER TABLE public.kickoff_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "kickoff_reports_select_project_owner"
+  ON public.kickoff_reports FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects
+      WHERE id = project_id AND user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "kickoff_reports_insert_project_owner"
+  ON public.kickoff_reports FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.projects
+      WHERE id = project_id AND user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "kickoff_reports_update_project_owner"
+  ON public.kickoff_reports FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects
+      WHERE id = project_id AND user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.projects
+      WHERE id = project_id AND user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "kickoff_reports_delete_project_owner"
+  ON public.kickoff_reports FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects
+      WHERE id = project_id AND user_id = auth.uid()
+    )
+  );
+
 -- ============================================================
--- Done. Tables: profiles, projects, messages
+-- Done. Tables: profiles, projects, messages, kickoff_reports
 -- RLS enabled on all tables.
 -- ============================================================

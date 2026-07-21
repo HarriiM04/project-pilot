@@ -40,6 +40,7 @@ Output format must be valid JSON matching this schema exactly (do NOT wrap in ma
   },
   "suggested_quick_replies": [ "Option 1 in user language", "Option 2 in user language", "Option 3 in user language" ],
   "assistant_reply": "Pilot's short, logical follow-up reply asking exactly one business/workflow question in the user's mirrored language",
-  "dominant_language": "Detected language (e.g. English, Hinglish, Hindi, Gujarati)"
+  "dominant_language": "Detected language (e.g. English, Hinglish, Hindi, Gujarati)",
+  "industry_domain": "Detected industry domain (e.g. Healthcare, E-Commerce, EdTech)"
 }`
 }

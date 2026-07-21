@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -13,12 +14,20 @@ export async function POST(req: NextRequest) {
       return new Response('Unauthorized', { status: 401 })
     }
 
+    if (!checkRateLimit(user.id, 10, 60000)) {
+      return new Response('Rate limit exceeded', { status: 429 })
+    }
+
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     const projectId = formData.get('projectId') as string | null
 
-    if (!file || !projectId) {
-      return new Response('Missing file or projectId parameter', { status: 400 })
+    if (!file || !projectId || typeof projectId !== 'string') {
+      return new Response('Missing or invalid file or projectId parameter', { status: 400 })
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+      return new Response('File too large (max 10MB)', { status: 413 })
     }
 
     // Verify project ownership
