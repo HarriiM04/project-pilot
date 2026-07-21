@@ -5,6 +5,8 @@ import { FileText, Sparkles, CheckCircle2, CircleDashed, Loader2, Printer } from
 import { Button } from '@/components/ui/button'
 import { useDiscovery } from '@/lib/discovery-store'
 import { cn } from '@/lib/utils'
+import { SendProposalDialog } from '@/components/send-proposal-dialog'
+import { createClient } from '@/lib/supabase/client'
 
 // Helper to format inline markdown like **bold** text
 function renderInline(text: string): ReactNode[] {
@@ -135,6 +137,18 @@ export function KickoffReportViewer() {
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // Check admin status
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+          .then(({ data }) => setIsAdmin(!!data?.is_admin))
+      }
+    })
+  }, [])
 
   // Check if a report was already generated for this project and docType
   useEffect(() => {
@@ -199,13 +213,15 @@ export function KickoffReportViewer() {
   const overallProgress = discovery.overallCompletion || 0
   const isReadyForReport = overallProgress >= 85 || (discovery.sections && discovery.sections.some(s => s.completion > 50))
 
-  const docTabs = [
+  const allTabs = [
     { id: 'KICKOFF', label: '15-Section Kickoff' },
     { id: 'BRD', label: 'BRD (Business)' },
     { id: 'PRD', label: 'PRD (Product)' },
     { id: 'SRS', label: 'SRS (Technical)' },
     { id: 'SOW', label: 'SOW (Scope)' },
   ] as const
+
+  const docTabs = isAdmin ? allTabs : [allTabs[0]]
 
   return (
     <div className="flex h-full flex-col bg-card/40 print:bg-white print:h-auto print:overflow-visible">
@@ -262,16 +278,25 @@ export function KickoffReportViewer() {
 
         <div className="flex items-center gap-2">
           {reportMarkdown && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              className="h-8 gap-1.5 px-2.5 text-xs font-medium print:hidden"
-              title="Print or Save to PDF"
-            >
-              <Printer className="size-3.5" />
-              <span>Export {docType} PDF</span>
-            </Button>
+            <>
+              {isAdmin && (
+                <SendProposalDialog 
+                  projectId={projectId} 
+                  reportMarkdown={reportMarkdown} 
+                  projectName={discovery.clientName || 'ProjectPilot Client'}
+                />
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                className="h-8 gap-1.5 px-2.5 text-xs font-medium print:hidden"
+                title="Print or Save to PDF"
+              >
+                <Printer className="size-3.5" />
+                <span>Export {docType} PDF</span>
+              </Button>
+            </>
           )}
 
           <Button

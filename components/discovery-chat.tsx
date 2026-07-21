@@ -6,12 +6,28 @@ import { Button } from '@/components/ui/button'
 import { FileUploadButton } from '@/components/file-upload-button'
 import { useDiscovery } from '@/lib/discovery-store'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 export function DiscoveryChat() {
-  const { messages, discovery, isStreaming, sendMessage } = useDiscovery()
+  const { messages, discovery, isStreaming, sendMessage, projectId } = useDiscovery()
   const [input, setInput] = useState('')
+  const [isReadOnly, setIsReadOnly] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user && projectId) {
+        supabase.from('projects').select('user_id').eq('id', projectId).single()
+          .then(({ data }) => {
+             if (data && data.user_id !== user.id) {
+               setIsReadOnly(true)
+             }
+          })
+      }
+    })
+  }, [projectId])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -122,7 +138,7 @@ export function DiscoveryChat() {
       <div className="shrink-0 border-t border-border px-4 py-3">
         <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-2.5 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20">
           <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
-            <FileUploadButton />
+            {!isReadOnly && <FileUploadButton />}
           </div>
           <div className="flex items-end gap-2">
             <textarea
@@ -131,13 +147,14 @@ export function DiscoveryChat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               rows={1}
-              placeholder="Describe your software idea or ask a question..."
-              className="max-h-32 flex-1 resize-none bg-transparent py-1 text-sm outline-none placeholder:text-muted-foreground"
+              disabled={isReadOnly}
+              placeholder={isReadOnly ? "Admin Mode: Read-Only View" : "Describe your software idea or ask a question..."}
+              className="max-h-32 flex-1 resize-none bg-transparent py-1 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-70 disabled:cursor-not-allowed"
             />
             <Button
               size="icon-sm"
               onClick={submit}
-              disabled={!input.trim() || isStreaming}
+              disabled={!input.trim() || isStreaming || isReadOnly}
               aria-label="Send message"
             >
               <ArrowUp />

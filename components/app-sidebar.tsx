@@ -16,6 +16,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 interface RecentProject {
   id: string
@@ -31,8 +32,22 @@ export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [loadingRecent, setLoadingRecent] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
+    const supabase = createClient()
+    
+    // Check if user is admin
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single()
+          .then(({ data }) => setIsAdmin(!!data?.is_admin))
+      }
+    })
     fetch('/api/projects')
       .then((r) => r.json())
       .then((data) => {
@@ -49,6 +64,10 @@ export function AppSidebar() {
     { label: 'Templates', icon: LayoutTemplate, href: '#', disabled: true },
     { label: 'Settings', icon: Settings, href: '#', disabled: true },
   ]
+  
+  if (isAdmin) {
+    nav.splice(1, 0, { label: 'Admin Panel', icon: Settings, href: '/admin', disabled: false })
+  }
 
   return (
     <aside
@@ -74,14 +93,25 @@ export function AppSidebar() {
         )}
       </Link>
 
-      {/* New project */}
-      <div className="p-3">
+      {/* New project & Admin back button */}
+      <div className="p-3 flex flex-col gap-2">
+        {isAdmin && (
+          <Link href="/admin">
+            <Button
+              className={cn('w-full bg-primary/20 text-primary hover:bg-primary/30', collapsed && 'px-0')}
+              size="sm"
+            >
+              <Settings className="size-4 mr-2" />
+              {!collapsed && 'Admin Dashboard'}
+            </Button>
+          </Link>
+        )}
         <Button
           className={cn('w-full', collapsed && 'px-0')}
           size="sm"
           onClick={() => router.push('/projects')}
         >
-          <Plus />
+          <Plus className={isAdmin && !collapsed ? "mr-2" : ""} />
           {!collapsed && 'New discovery'}
         </Button>
       </div>

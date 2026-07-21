@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name   TEXT,
   avatar_url  TEXT,
+  is_admin    BOOLEAN DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -123,47 +124,62 @@ CREATE POLICY "profiles_update_own"
 -- ── projects ────────────────────────────────────────────────
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "projects_select_own"
+CREATE POLICY "projects_select_own_or_admin"
   ON public.projects FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (
+    auth.uid() = user_id OR 
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true
+  );
 
 CREATE POLICY "projects_insert_own"
   ON public.projects FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "projects_update_own"
+CREATE POLICY "projects_update_own_or_admin"
   ON public.projects FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (
+    auth.uid() = user_id OR 
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true
+  )
+  WITH CHECK (
+    auth.uid() = user_id OR 
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true
+  );
 
-CREATE POLICY "projects_delete_own"
+CREATE POLICY "projects_delete_own_or_admin"
   ON public.projects FOR DELETE
-  USING (auth.uid() = user_id);
+  USING (
+    auth.uid() = user_id OR 
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true
+  );
 
 -- ── messages ────────────────────────────────────────────────
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "messages_select_project_owner"
+CREATE POLICY "messages_select_project_owner_or_admin"
   ON public.messages FOR SELECT
   USING (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
     )
   );
 
-CREATE POLICY "messages_insert_project_owner"
+CREATE POLICY "messages_insert_project_owner_or_admin"
   ON public.messages FOR INSERT
   WITH CHECK (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
     )
   );
 
-CREATE POLICY "messages_delete_project_owner"
+CREATE POLICY "messages_delete_project_owner_or_admin"
   ON public.messages FOR DELETE
   USING (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
@@ -173,42 +189,47 @@ CREATE POLICY "messages_delete_project_owner"
 -- ── kickoff_reports ─────────────────────────────────────────
 ALTER TABLE public.kickoff_reports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "kickoff_reports_select_project_owner"
+CREATE POLICY "kickoff_reports_select_project_owner_or_admin"
   ON public.kickoff_reports FOR SELECT
   USING (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
     )
   );
 
-CREATE POLICY "kickoff_reports_insert_project_owner"
+CREATE POLICY "kickoff_reports_insert_project_owner_or_admin"
   ON public.kickoff_reports FOR INSERT
   WITH CHECK (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
     )
   );
 
-CREATE POLICY "kickoff_reports_update_project_owner"
+CREATE POLICY "kickoff_reports_update_project_owner_or_admin"
   ON public.kickoff_reports FOR UPDATE
   USING (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
     )
   )
   WITH CHECK (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()
     )
   );
 
-CREATE POLICY "kickoff_reports_delete_project_owner"
+CREATE POLICY "kickoff_reports_delete_project_owner_or_admin"
   ON public.kickoff_reports FOR DELETE
   USING (
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()) = true OR
     EXISTS (
       SELECT 1 FROM public.projects
       WHERE id = project_id AND user_id = auth.uid()

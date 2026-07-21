@@ -161,6 +161,7 @@ export default function ProjectsDashboard() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchProjects = useCallback(async () => {
@@ -173,10 +174,14 @@ export default function ProjectsDashboard() {
 
   useEffect(() => {
     fetchProjects()
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? '')
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserEmail(user?.email ?? '')
+      if (user) {
+        supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+          .then(({ data }) => setIsAdmin(!!data?.is_admin))
+      }
     })
-  }, [fetchProjects, supabase.auth])
+  }, [fetchProjects, supabase])
 
   const handleCreate = (project: Project) => {
     setShowModal(false)
@@ -211,6 +216,14 @@ export default function ProjectsDashboard() {
           <span className="font-semibold">ProjectPilot</span>
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+            >
+              Admin Dashboard
+            </button>
+          )}
           <span className="hidden text-sm text-muted-foreground sm:inline">{userEmail}</span>
           <ThemeToggle />
           <button
