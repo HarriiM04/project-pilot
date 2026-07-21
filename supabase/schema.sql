@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_profiles_updated_at ON public.profiles;
 CREATE TRIGGER trg_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS public.projects (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_projects_updated_at ON public.projects;
 CREATE TRIGGER trg_projects_updated_at
   BEFORE UPDATE ON public.projects
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -95,6 +97,7 @@ CREATE TABLE IF NOT EXISTS public.kickoff_reports (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_kickoff_reports_updated_at ON public.kickoff_reports;
 CREATE TRIGGER trg_kickoff_reports_updated_at
   BEFORE UPDATE ON public.kickoff_reports
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
