@@ -14,6 +14,16 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/theme-toggle'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { getInitials } from '@/lib/utils'
 
 interface Project {
   id: string
@@ -161,8 +171,9 @@ export default function ProjectsDashboard() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [userEmail, setUserEmail] = useState('')
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [userName, setUserName] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const fetchProjects = useCallback(async () => {
     setLoading(true)
@@ -176,10 +187,7 @@ export default function ProjectsDashboard() {
     fetchProjects()
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUserEmail(user?.email ?? '')
-      if (user) {
-        supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-          .then(({ data }) => setIsAdmin(!!data?.is_admin))
-      }
+      setUserName((user?.user_metadata?.full_name as string) ?? '')
     })
   }, [fetchProjects, supabase])
 
@@ -188,13 +196,18 @@ export default function ProjectsDashboard() {
     router.push(`/workspace/${project.id}`)
   }
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('Delete this project and all its data? This cannot be undone.')) return
-    setDeletingId(id)
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-    setProjects((prev) => prev.filter((p) => p.id !== id))
+    setConfirmDeleteId(id)
+  }
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return
+    setDeletingId(confirmDeleteId)
+    await fetch(`/api/projects/${confirmDeleteId}`, { method: 'DELETE' })
+    setProjects((prev) => prev.filter((p) => p.id !== confirmDeleteId))
     setDeletingId(null)
+    setConfirmDeleteId(null)
   }
 
   const handleLogout = async () => {
@@ -203,7 +216,7 @@ export default function ProjectsDashboard() {
     router.refresh()
   }
 
-  const initials = userEmail.slice(0, 2).toUpperCase()
+  const initials = getInitials(userName, userEmail)
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
@@ -216,14 +229,6 @@ export default function ProjectsDashboard() {
           <span className="font-semibold">ProjectPilot</span>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && (
-            <button
-              onClick={() => router.push('/admin')}
-              className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
-            >
-              Admin Dashboard
-            </button>
-          )}
           <span className="hidden text-sm text-muted-foreground sm:inline">{userEmail}</span>
           <ThemeToggle />
           <button
@@ -339,6 +344,24 @@ export default function ProjectsDashboard() {
         onClose={() => setShowModal(false)}
         onCreate={handleCreate}
       />
+
+      <Dialog open={!!confirmDeleteId} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this project? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={!!deletingId}>
+              {deletingId ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

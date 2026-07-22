@@ -145,6 +145,7 @@ export function DiscoveryProvider({
         .filter((m) => m.id !== 'welcome')
         .concat(userMessage)
 
+      const previousMessages = [...messages]
       setMessages((prev) => [...prev, userMessage, assistantMessage])
       setIsStreaming(true)
 
@@ -244,16 +245,13 @@ export function DiscoveryProvider({
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Unknown error'
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content: `⚠️ Could not reach the AI engine: ${msg}. Please try again.`,
-                }
-              : m,
-          ),
-        )
+        // Rollback optimistic messages and show an error toast or message
+        setMessages([...previousMessages, {
+          id: nextId('e'),
+          role: 'assistant',
+          content: `⚠️ Could not reach the AI engine: ${msg}. Please try again.`,
+          createdAt: Date.now()
+        }])
       } finally {
         setIsStreaming(false)
       }

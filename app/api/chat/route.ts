@@ -87,7 +87,14 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  if (project.user_id && project.user_id !== user.id) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = !!profile?.is_admin
+
+  if (!isAdmin && project.user_id && project.user_id !== user.id) {
     return new Response('Forbidden — you do not have access to this project', { status: 403 })
   }
 
@@ -140,11 +147,15 @@ export async function POST(req: NextRequest) {
               constraints: 'missing'
             },
             suggested_quick_replies: ['Tell me more', 'Let me check', 'I have a document to upload'],
-            assistant_reply: jsonText || "Could you tell me a little more about the primary goal of this software?"
+            assistant_reply: jsonText.trim() || "Could you tell me a little more about the primary goal of this software?"
           }
         }
 
-        const assistantReply = parsedTurn.assistant_reply || "Let's explore your idea further."
+        let assistantReply = parsedTurn.assistant_reply || ""
+        if (!assistantReply.trim()) {
+          assistantReply = "I'm sorry, I couldn't process that properly. Could you rephrase your last point?"
+        }
+        
         const completeness = Math.min(100, Math.max(0, parsedTurn.completeness_score || 0))
 
         // Step 1: Stream conversational reply

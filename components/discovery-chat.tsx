@@ -1,30 +1,40 @@
 'use client'
 
-import { ArrowUp, Bot, Sparkles } from 'lucide-react'
+import { ArrowUp, Bot, Sparkles, ArrowRight, Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { FileUploadButton } from '@/components/file-upload-button'
 import { useDiscovery } from '@/lib/discovery-store'
-import { cn } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+
 
 export function DiscoveryChat() {
   const { messages, discovery, isStreaming, sendMessage, projectId } = useDiscovery()
   const [input, setInput] = useState('')
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [userInitials, setUserInitials] = useState('ME')
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user && projectId) {
-        supabase.from('projects').select('user_id').eq('id', projectId).single()
-          .then(({ data }) => {
-             if (data && data.user_id !== user.id) {
-               setIsReadOnly(true)
-             }
-          })
+      if (user) {
+        // Set user initials from name or email
+        const name = (user.user_metadata?.full_name as string) ?? user.email ?? ''
+        const email = user.email ?? ''
+        setUserInitials(getInitials(name, email))
+
+        // Check read-only for non-owners
+        if (projectId) {
+          supabase.from('projects').select('user_id').eq('id', projectId).single()
+            .then(({ data }) => {
+               if (data && data.user_id !== user.id) {
+                 setIsReadOnly(true)
+               }
+            })
+        }
       }
     })
   }, [projectId])
@@ -95,7 +105,7 @@ export function DiscoveryChat() {
                   : 'bg-primary text-primary-foreground',
               )}
             >
-              {m.role === 'assistant' ? <Sparkles className="size-3.5" /> : 'AR'}
+              {m.role === 'assistant' ? <Sparkles className="size-3.5" /> : userInitials}
             </div>
             <div
               className={cn(

@@ -13,15 +13,27 @@ export default async function WorkspacePage({ params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
-  // Verify the project belongs to this user
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+
+  const isAdmin = !!profile?.is_admin
+
+  // Verify the project exists
   const { data: project } = await supabase
     .from('projects')
-    .select('id, title')
+    .select('id, title, user_id')
     .eq('id', projectId)
-    .eq('user_id', user.id)
     .single()
 
   if (!project) redirect('/projects')
+  
+  // If not admin and not the owner, deny access
+  if (!isAdmin && project.user_id !== user.id) {
+    redirect('/projects')
+  }
 
   return <WorkspaceShell projectId={projectId} />
 }

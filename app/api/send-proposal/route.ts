@@ -29,15 +29,21 @@ export async function POST(req: NextRequest) {
       return new Response('Missing required fields', { status: 400 })
     }
 
-    // Verify ownership
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    const isAdmin = !!profile?.is_admin
+
+    // Verify ownership or admin
     const { data: project } = await supabase
       .from('projects')
-      .select('id')
+      .select('id, user_id')
       .eq('id', projectId)
-      .eq('user_id', user.id)
       .single()
 
-    if (!project) {
+    if (!project || (!isAdmin && project.user_id !== user.id)) {
       return new Response('Project not found or unauthorized', { status: 403 })
     }
 

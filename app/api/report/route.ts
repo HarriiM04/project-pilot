@@ -108,7 +108,14 @@ export async function POST(req: NextRequest) {
       return new Response(`Forbidden — project not found (${dbError?.message || 'No project matched ID ' + projectId})`, { status: 403 })
     }
 
-    if (project.user_id && project.user_id !== user.id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    const isAdmin = !!profile?.is_admin
+
+    if (!isAdmin && project.user_id && project.user_id !== user.id) {
       return new Response('Forbidden — you do not have access to this project', { status: 403 })
     }
 
@@ -198,7 +205,7 @@ export async function POST(req: NextRequest) {
           const updatedPayload = { ...extractedPayload, docs: updatedDocs, active_doc_type: docType }
 
           // If docType is KICKOFF, also update report_markdown column directly for backward compatibility
-          const mainMarkdown = docType === 'KICKOFF' ? fullMarkdown : (existingReport?.report_markdown || fullMarkdown)
+          const mainMarkdown = docType === 'KICKOFF' ? fullMarkdown : (existingReport?.report_markdown || '')
 
           await supabase
             .from('kickoff_reports')

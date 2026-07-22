@@ -13,15 +13,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = !!profile?.is_admin
+
   const { data: project, error: projectError } = await supabase
     .from('projects')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
     .single()
 
-  if (projectError || !project) {
-    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  if (projectError || !project || (!isAdmin && project.user_id !== user.id)) {
+    return NextResponse.json({ error: 'Project not found or unauthorized' }, { status: 404 })
   }
 
   const { data: messages } = await supabase
@@ -43,16 +49,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = !!profile?.is_admin
+
   // Verify ownership first (RLS also enforces this)
   const { data: existing } = await supabase
     .from('projects')
-    .select('id')
+    .select('id, user_id')
     .eq('id', id)
-    .eq('user_id', user.id)
     .single()
 
-  if (!existing) {
-    return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  if (!existing || (!isAdmin && existing.user_id !== user.id)) {
+    return NextResponse.json({ error: 'Project not found or unauthorized' }, { status: 404 })
   }
 
   const body = await req.json()
@@ -87,11 +99,27 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+  const isAdmin = !!profile?.is_admin
+
+  const { data: existing } = await supabase
+    .from('projects')
+    .select('id, user_id')
+    .eq('id', id)
+    .single()
+
+  if (!existing || (!isAdmin && existing.user_id !== user.id)) {
+    return NextResponse.json({ error: 'Project not found or unauthorized' }, { status: 404 })
+  }
+
   const { error } = await supabase
     .from('projects')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

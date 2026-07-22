@@ -3,16 +3,26 @@ import { createClient } from '@/lib/supabase/server'
 
 /**
  * Root page — redirects:
- * - Authenticated users → /projects
- * - Unauthenticated users → /auth (handled by middleware, but belt-and-suspenders)
+ * - Admins → /admin
+ * - Authenticated clients → /projects
+ * - Unauthenticated → /auth
  */
 export default async function RootPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (user) {
-    redirect('/projects')
+  if (!user) redirect('/auth')
+
+  // Check admin status
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.is_admin) {
+    redirect('/admin')
   } else {
-    redirect('/auth')
+    redirect('/projects')
   }
 }

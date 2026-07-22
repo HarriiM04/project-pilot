@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
+import { getInitials } from '@/lib/utils'
 
 interface AppHeaderProps {
   projectName: string
@@ -24,11 +25,7 @@ export function AppHeader({ projectName, domain }: AppHeaderProps) {
       const email = data.user?.email ?? ''
       const name = (data.user?.user_metadata?.full_name as string) ?? email
       setUserEmail(email)
-      setUserInitials(
-        name.length >= 2
-          ? name.slice(0, 2).toUpperCase()
-          : email.slice(0, 2).toUpperCase(),
-      )
+      setUserInitials(getInitials(name, email))
     })
   }, [supabase.auth])
 

@@ -14,7 +14,7 @@ export default async function AdminPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('is_admin, org_id')
     .eq('id', user.id)
     .single()
 
@@ -22,24 +22,46 @@ export default async function AdminPage() {
     redirect('/projects') // Redirect non-admins to their projects
   }
 
-  // 2. Fetch all projects
-  // We fetch all projects. Because the user is an admin, the RLS policies
-  // allow them to SELECT all rows from the projects table.
-  const { data: projects, error } = await supabase
+  const adminOrgId = profile.org_id
+
+  // 2. Fetch projects scoped to admin's organization
+  // RLS already enforces org isolation, but we also filter explicitly
+  let projectsQuery = supabase
     .from('projects')
     .select('*')
     .order('updated_at', { ascending: false })
 
-  // Also fetch all profiles to map user_ids to full_names
-  const { data: profiles } = await supabase.from('profiles').select('id, full_name')
+  if (adminOrgId) {
+    projectsQuery = projectsQuery.eq('org_id', adminOrgId)
+  }
+
+  const { data: projects, error } = await projectsQuery
+
+  // Fetch profiles in the same org to map user_ids to names
+  let profilesQuery = supabase.from('profiles').select('id, full_name')
+  if (adminOrgId) {
+    profilesQuery = profilesQuery.eq('org_id', adminOrgId)
+  }
+  const { data: profiles } = await profilesQuery
   const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name || 'Unknown User']))
+
+  // Fetch org name for display
+  let orgName = 'All Organizations'
+  if (adminOrgId) {
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', adminOrgId)
+      .single()
+    orgName = org?.name || 'Your Organization'
+  }
 
   return (
     <div className="flex h-full w-full flex-col p-8 overflow-y-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
         <p className="text-muted-foreground mt-2">
-          Oversee all client projects, review discovery chats, and manage deliverables.
+          Managing <span className="font-semibold text-foreground">{orgName}</span> — oversee client projects, review discovery chats, and manage deliverables.
         </p>
       </div>
 

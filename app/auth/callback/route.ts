@@ -4,19 +4,31 @@ import { createClient } from '@/lib/supabase/server'
 /**
  * Handles the OAuth / magic-link callback.
  * Supabase redirects the browser here with ?code=... after the user
- * confirms their email or completes an OAuth flow.
+ * confirms their email or completes an OAuth flow (Google, etc.).
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('redirectTo') ?? '/projects'
 
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Successful login — redirect to the originally requested page
-      return NextResponse.redirect(`${origin}${next}`)
+      // Check if user is admin → route to /admin, otherwise /projects
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single()
+
+        if (profile?.is_admin) {
+          return NextResponse.redirect(`${origin}/admin`)
+        }
+      }
+
+      return NextResponse.redirect(`${origin}/projects`)
     }
   }
 

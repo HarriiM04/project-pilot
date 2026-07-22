@@ -30,15 +30,21 @@ export async function POST(req: NextRequest) {
       return new Response('File too large (max 10MB)', { status: 413 })
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    const isAdmin = !!profile?.is_admin
+
     // Verify project ownership
     const { data: project } = await supabase
       .from('projects')
-      .select('id, uploaded_docs')
+      .select('id, uploaded_docs, user_id')
       .eq('id', projectId)
-      .eq('user_id', user.id)
       .single()
 
-    if (!project) {
+    if (!project || (!isAdmin && project.user_id !== user.id)) {
       return new Response('Forbidden — project not found', { status: 403 })
     }
 

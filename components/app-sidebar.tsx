@@ -1,15 +1,14 @@
 'use client'
 
 import {
-  Compass,
   FileStack,
   FolderClock,
-  LayoutTemplate,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
-  Settings,
+  ShieldCheck,
+  ArrowLeft,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -37,7 +36,6 @@ export function AppSidebar() {
   useEffect(() => {
     const supabase = createClient()
     
-    // Check if user is admin
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         supabase
@@ -52,22 +50,11 @@ export function AppSidebar() {
       .then((r) => r.json())
       .then((data) => {
         const projects = (data.projects ?? []) as RecentProject[]
-        setRecentProjects(projects.slice(0, 5)) // show last 5
+        setRecentProjects(projects.slice(0, 5))
       })
       .catch(() => {})
       .finally(() => setLoadingRecent(false))
   }, [])
-
-  const nav = [
-    { label: 'Dashboard', icon: Compass, href: '/projects', disabled: false },
-    { label: 'Recent Projects', icon: FolderClock, href: '/projects', disabled: false },
-    { label: 'Templates', icon: LayoutTemplate, href: '#', disabled: true },
-    { label: 'Settings', icon: Settings, href: '#', disabled: true },
-  ]
-  
-  if (isAdmin) {
-    nav.splice(1, 0, { label: 'Admin Panel', icon: Settings, href: '/admin', disabled: false })
-  }
 
   return (
     <aside
@@ -77,7 +64,7 @@ export function AppSidebar() {
       )}
     >
       {/* Brand */}
-      <Link href="/projects" className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4 transition-opacity hover:opacity-80">
+      <Link href={isAdmin ? '/admin' : '/projects'} className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4 transition-opacity hover:opacity-80">
         <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <FileStack className="size-4" />
         </div>
@@ -87,61 +74,64 @@ export function AppSidebar() {
               ProjectPilot
             </span>
             <span className="font-mono text-[10px] tracking-wide text-muted-foreground">
-              AI PRE-SALES
+              {isAdmin ? 'ADMIN' : 'DISCOVERY'}
             </span>
           </div>
         )}
       </Link>
 
-      {/* New project & Admin back button */}
+      {/* Top Actions */}
       <div className="p-3 flex flex-col gap-2">
-        {isAdmin && (
-          <Link href="/admin">
+        {isAdmin ? (
+          /* Admin: "Back to Admin" button */
+          <Link href="/admin" className="animate-in fade-in slide-in-from-top-2 duration-300">
             <Button
-              className={cn('w-full bg-primary/20 text-primary hover:bg-primary/30', collapsed && 'px-0')}
+              variant="outline"
+              className={cn('w-full gap-2', collapsed && 'px-0')}
               size="sm"
             >
-              <Settings className="size-4 mr-2" />
-              {!collapsed && 'Admin Dashboard'}
+              <ArrowLeft className="size-4" />
+              {!collapsed && 'Back to Dashboard'}
             </Button>
           </Link>
+        ) : (
+          /* Client: "New Discovery" button */
+          <Button
+            className={cn('w-full', collapsed && 'px-0')}
+            size="sm"
+            onClick={() => router.push('/projects')}
+          >
+            <Plus className="size-4" />
+            {!collapsed && 'New discovery'}
+          </Button>
         )}
-        <Button
-          className={cn('w-full', collapsed && 'px-0')}
-          size="sm"
-          onClick={() => router.push('/projects')}
-        >
-          <Plus className={isAdmin && !collapsed ? "mr-2" : ""} />
-          {!collapsed && 'New discovery'}
-        </Button>
       </div>
 
-      {/* Nav links */}
+      {/* Nav links — clean, role-appropriate */}
       <nav className="flex flex-col gap-1 px-3">
-        {nav.map((item) => (
+        {isAdmin ? (
           <Link
-            key={item.label}
-            href={item.href}
-            onClick={item.disabled ? (e) => e.preventDefault() : undefined}
+            href="/admin"
             className={cn(
-              'flex items-center justify-between rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
-              item.disabled
-                ? 'opacity-50 pointer-events-none cursor-not-allowed text-muted-foreground'
-                : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+              'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
               collapsed && 'justify-center px-0',
             )}
           >
-            <div className="flex items-center gap-3">
-              <item.icon className="size-4 shrink-0" />
-              {!collapsed && item.label}
-            </div>
-            {!collapsed && item.disabled && (
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[8px] text-muted-foreground">
-                SOON
-              </span>
-            )}
+            <ShieldCheck className="size-4 shrink-0" />
+            {!collapsed && 'All Projects'}
           </Link>
-        ))}
+        ) : (
+          <Link
+            href="/projects"
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+              collapsed && 'justify-center px-0',
+            )}
+          >
+            <FolderClock className="size-4 shrink-0" />
+            {!collapsed && 'My Projects'}
+          </Link>
+        )}
       </nav>
 
       {/* Recent projects */}

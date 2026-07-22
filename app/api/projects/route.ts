@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
   const clientName = (typeof body.client_name === 'string' ? body.client_name.replace(/\u0000/g, '').trim().substring(0, 100) : '')
   const domain = (typeof body.domain === 'string' ? body.domain.replace(/\u0000/g, '').trim().substring(0, 100) : '')
 
+  // Fetch user's org_id for multi-tenancy
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('org_id')
+    .eq('id', user.id)
+    .single()
+
   const { data, error } = await supabase
     .from('projects')
     .insert({
@@ -59,6 +66,7 @@ export async function POST(req: NextRequest) {
       title,
       client_name: clientName,
       domain,
+      org_id: profile?.org_id || null,
     })
     .select()
     .single()
