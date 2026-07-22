@@ -42,14 +42,15 @@ export default async function proxy(request: NextRequest) {
 
   const isAuthRoute = pathname.startsWith('/auth')
   const isApiRoute = pathname.startsWith('/api')
+  const isSiteRoute = pathname.startsWith('/site')
 
   // Allow API routes to handle their own auth checks
   if (isApiRoute) {
     return supabaseResponse
   }
 
-  // Unauthenticated user trying to access a protected page → redirect to /auth
-  if (!user && !isAuthRoute) {
+  // Unauthenticated user trying to access a protected page (not /auth and not /site) → redirect to /auth
+  if (!user && !isAuthRoute && !isSiteRoute) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/auth'
     redirectUrl.searchParams.set('redirectTo', pathname)
