@@ -1,0 +1,199 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import {
+  LayoutDashboard, FolderKanban,
+  PanelLeftClose, PanelLeftOpen,
+  LayoutGrid, LogOut, Mail,
+  ChevronDown, ShieldCheck,
+} from 'lucide-react'
+import { BrandLockup, BrandMark } from '@/components/brand-logo'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { ConfirmationDialog } from '@/components/confirmation-dialog'
+import { useToast } from '@/components/toast-container'
+import { createClient } from '@/lib/supabase/client'
+import { cn } from '@/lib/utils'
+import { getInitials } from '@/lib/utils'
+
+const navItems = [
+  { href: '/admin',          label: 'Dashboard',    icon: LayoutDashboard, exact: true },
+  { href: '/admin/projects', label: 'All Projects', icon: FolderKanban,    exact: false },
+]
+
+interface AdminShellProps {
+  children: React.ReactNode
+  userEmail: string
+  userName: string
+}
+
+export function AdminShell({ children, userEmail, userName }: AdminShellProps) {
+  const router   = useRouter()
+  const pathname = usePathname()
+  const { showToast } = useToast()
+  const supabase = createClient()
+
+  const [collapsed,    setCollapsed]    = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [logoutOpen,   setLogoutOpen]   = useState(false)
+
+  const initials = getInitials(userName || userEmail, userEmail)
+  const displayName = userName || userEmail.split('@')[0] || 'Admin'
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setLogoutOpen(false)
+    showToast('You have been signed out successfully', 'success')
+    router.push('/auth')
+    router.refresh()
+  }
+
+  return (
+    <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
+
+      {/* ── Sidebar ── */}
+      <aside className={cn(
+        'hidden md:flex flex-col shrink-0 border-r border-border bg-sidebar transition-[width] duration-200',
+        collapsed ? 'w-16' : 'w-60'
+      )}>
+        {/* Brand */}
+        <Link href="/admin"
+          className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4 hover:opacity-80 transition-opacity">
+          {collapsed
+            ? <BrandMark className="size-8 shrink-0" />
+            : <BrandLockup textSize="text-sm" variant="auto" />
+          }
+        </Link>
+
+        {/* Nav */}
+        <nav className="flex flex-col gap-1 p-3 flex-1">
+          {navItems.map(({ href, label, icon: Icon, exact }) => {
+            const active = exact ? pathname === href : pathname.startsWith(href)
+            return (
+              <Link key={href} href={href}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                  collapsed && 'justify-center px-0',
+                  active
+                    ? 'text-white shadow-md'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground'
+                )}
+                style={active ? { background: 'linear-gradient(135deg,#1a2340 0%,#2d6ef5 60%,#6b5ce7 100%)' } : {}}
+              >
+                <Icon className="size-4 shrink-0" />
+                {!collapsed && label}
+              </Link>
+            )
+          })}
+        </nav>
+      </aside>
+
+      {/* ── Main column ── */}
+      <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+
+        {/* Header */}
+        <header className="relative z-50 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/60 bg-background/90 px-4 backdrop-blur-xl">
+
+          {/* Left — sidebar toggle + breadcrumb */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCollapsed(c => !c)}
+              className="hidden md:flex items-center justify-center size-8 rounded-xl border border-border text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground hover:bg-muted cursor-pointer"
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </button>
+
+            {/* Breadcrumb label */}
+            <span className="text-sm font-semibold text-foreground hidden sm:inline">
+              {navItems.find(n => n.exact ? pathname === n.href : pathname.startsWith(n.href))?.label ?? 'Admin'}
+            </span>
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-2">
+            {/* Client view link */}
+            <Link
+              href="/projects"
+              className="hidden sm:flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground hover:bg-muted cursor-pointer"
+            >
+              <LayoutGrid className="size-3.5" />
+              Client View
+            </Link>
+
+            <ThemeToggle />
+
+            {/* Admin profile avatar + dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(o => !o)}
+                className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-1.5 transition-all hover:bg-muted hover:border-ring/50 cursor-pointer"
+              >
+                <div className="flex size-7 items-center justify-center rounded-full font-mono text-xs font-bold text-white"
+                  style={{ background: 'linear-gradient(135deg,#1a2340 0%,#2d6ef5 60%,#6b5ce7 100%)' }}>
+                  {initials}
+                </div>
+                <span className="hidden sm:inline text-sm font-medium">{displayName}</span>
+                <ChevronDown className={cn('size-3.5 text-muted-foreground transition-transform duration-200', dropdownOpen && 'rotate-180')} />
+              </button>
+
+              {dropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-[199]" onClick={() => setDropdownOpen(false)} />
+                  <div className="absolute right-0 top-11 z-[200] w-64 rounded-2xl border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                    {/* User info */}
+                    <div className="border-b border-border p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold text-white"
+                          style={{ background: 'linear-gradient(135deg,#1a2340 0%,#2d6ef5 60%,#6b5ce7 100%)' }}>
+                          {initials}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{displayName}</p>
+                          <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                            <Mail className="size-3 shrink-0" />{userEmail}
+                          </p>
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-ring/30 bg-ring/10 px-2 py-0.5 font-mono text-[9px] font-semibold tracking-widest text-ring">
+                            <ShieldCheck className="size-2.5" /> ADMIN
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Actions */}
+                    <div className="p-1.5">
+                      <button
+                        onClick={() => { setDropdownOpen(false); setLogoutOpen(true) }}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                      >
+                        <LogOut className="size-4" />
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+
+      {/* Logout confirmation */}
+      <ConfirmationDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+        title="Sign Out"
+        description="Are you sure you want to sign out of the admin panel?"
+        confirmLabel="Sign Out"
+        onConfirm={handleLogout}
+        icon={<LogOut className="size-5 text-muted-foreground" />}
+      />
+    </div>
+  )
+}

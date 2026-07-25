@@ -50,80 +50,202 @@
 
 :root {
   color-scheme: light;
-  --background: oklch(0.988 0.002 106);
-  --foreground: oklch(0.22 0.008 260);
+
+  /* ── ProjectPilot Brand Colors (extracted from logo) ──
+     Navy primary  #1a2340  → oklch(0.23 0.055 255)
+     Blue accent   #2d6ef5  → oklch(0.55 0.22 263)
+     Purple accent #6b5ce7  → oklch(0.53 0.20 285)
+     Light bg      #f8f9ff  → oklch(0.98 0.008 263)
+  ── */
+
+  --background: oklch(0.985 0.006 263);
+  --foreground: oklch(0.20 0.055 255);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.008 260);
+  --card-foreground: oklch(0.20 0.055 255);
+
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.008 260);
-  --primary: oklch(0.24 0.008 260);
-  --primary-foreground: oklch(0.985 0.002 106);
-  --secondary: oklch(0.965 0.003 106);
-  --secondary-foreground: oklch(0.24 0.008 260);
-  --muted: oklch(0.965 0.003 106);
-  --muted-foreground: oklch(0.53 0.008 260);
-  --accent: oklch(0.86 0.075 155);
-  --accent-foreground: oklch(0.27 0.045 155);
+  --popover-foreground: oklch(0.20 0.055 255);
+
+  /* Primary = logo navy #1a2340 */
+  --primary: oklch(0.23 0.055 255);
+  --primary-foreground: oklch(0.98 0.006 263);
+
+  --secondary: oklch(0.945 0.018 263);
+  --secondary-foreground: oklch(0.23 0.055 255);
+
+  --muted: oklch(0.945 0.018 263);
+  --muted-foreground: oklch(0.50 0.030 263);
+
+  /* Accent = logo electric blue #2d6ef5 */
+  --accent: oklch(0.92 0.055 263);
+  --accent-foreground: oklch(0.30 0.15 263);
+
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.918 0.004 106);
-  --input: oklch(0.918 0.004 106);
-  --ring: oklch(0.72 0.09 155);
-  --chart-1: oklch(0.72 0.09 155);
-  --chart-2: oklch(0.55 0.09 250);
-  --chart-3: oklch(0.68 0.13 55);
+
+  --border: oklch(0.900 0.020 263);
+  --input: oklch(0.900 0.020 263);
+
+  /* Ring = electric blue for focus glow */
+  --ring: oklch(0.55 0.22 263);
+
+  /* Charts: blue → purple → teal → orange → pink */
+  --chart-1: oklch(0.55 0.22 263);
+  --chart-2: oklch(0.53 0.20 285);
+  --chart-3: oklch(0.62 0.15 195);
   --chart-4: oklch(0.62 0.14 15);
-  --chart-5: oklch(0.55 0.06 300);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.972 0.003 106);
-  --sidebar-foreground: oklch(0.35 0.008 260);
-  --sidebar-primary: oklch(0.24 0.008 260);
-  --sidebar-primary-foreground: oklch(0.985 0.002 106);
-  --sidebar-accent: oklch(0.93 0.005 106);
-  --sidebar-accent-foreground: oklch(0.24 0.008 260);
-  --sidebar-border: oklch(0.912 0.004 106);
-  --sidebar-ring: oklch(0.72 0.09 155);
+  --chart-5: oklch(0.58 0.18 315);
+
+  --radius: 0.75rem;
+
+  /* Sidebar = very light navy-tinted bg */
+  --sidebar: oklch(0.965 0.018 255);
+  --sidebar-foreground: oklch(0.30 0.055 255);
+  --sidebar-primary: oklch(0.23 0.055 255);
+  --sidebar-primary-foreground: oklch(0.98 0.006 263);
+  --sidebar-accent: oklch(0.915 0.035 263);
+  --sidebar-accent-foreground: oklch(0.23 0.055 255);
+  --sidebar-border: oklch(0.885 0.022 263);
+  --sidebar-ring: oklch(0.55 0.22 263);
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.17 0.006 260);
-  --foreground: oklch(0.95 0.003 106);
-  --card: oklch(0.205 0.007 260);
-  --card-foreground: oklch(0.95 0.003 106);
-  --popover: oklch(0.205 0.007 260);
-  --popover-foreground: oklch(0.95 0.003 106);
-  --primary: oklch(0.95 0.003 106);
-  --primary-foreground: oklch(0.2 0.007 260);
-  --secondary: oklch(0.26 0.008 260);
-  --secondary-foreground: oklch(0.95 0.003 106);
-  --muted: oklch(0.26 0.008 260);
-  --muted-foreground: oklch(0.68 0.008 260);
-  --accent: oklch(0.42 0.07 155);
-  --accent-foreground: oklch(0.93 0.04 155);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.6 0.1 155);
-  --chart-1: oklch(0.7 0.1 155);
-  --chart-2: oklch(0.62 0.1 250);
-  --chart-3: oklch(0.7 0.13 55);
+
+  /* ── 4-layer surface system ──────────────────────────────────────
+     html/bg  #09091a  → oklch(0.10 0.030 255)  deepest black-navy
+     sidebar  #10142a  → oklch(0.13 0.036 255)  dark navy
+     chat bg  #161c35  → oklch(0.16 0.040 255)  mid navy  (= --background)
+     report   #1e2640  → oklch(0.21 0.044 255)  lighter   (= --card)
+  ────────────────────────────────────────────────────────────────── */
+
+  --background:   oklch(0.16 0.040 255);
+  --foreground:   oklch(0.93 0.012 263);
+
+  --card:         oklch(0.21 0.044 255);
+  --card-foreground: oklch(0.93 0.012 263);
+
+  --popover:      oklch(0.21 0.044 255);
+  --popover-foreground: oklch(0.93 0.012 263);
+
+  --primary:      oklch(0.93 0.012 263);
+  --primary-foreground: oklch(0.16 0.040 255);
+
+  --secondary:    oklch(0.24 0.048 255);
+  --secondary-foreground: oklch(0.93 0.012 263);
+
+  --muted:        oklch(0.24 0.048 255);
+  --muted-foreground: oklch(0.60 0.028 263);
+
+  --accent:       oklch(0.30 0.10 263);
+  --accent-foreground: oklch(0.82 0.15 263);
+
+  --destructive:  oklch(0.704 0.191 22.216);
+
+  --border:       oklch(1 0 0 / 8%);
+  --input:        oklch(1 0 0 / 11%);
+
+  --ring: oklch(0.62 0.22 263);
+
+  --chart-1: oklch(0.65 0.22 263);
+  --chart-2: oklch(0.60 0.20 285);
+  --chart-3: oklch(0.68 0.15 195);
   --chart-4: oklch(0.64 0.14 15);
-  --chart-5: oklch(0.6 0.07 300);
-  --sidebar: oklch(0.2 0.007 260);
-  --sidebar-foreground: oklch(0.7 0.008 260);
-  --sidebar-primary: oklch(0.95 0.003 106);
-  --sidebar-primary-foreground: oklch(0.2 0.007 260);
-  --sidebar-accent: oklch(0.26 0.008 260);
-  --sidebar-accent-foreground: oklch(0.95 0.003 106);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.6 0.1 155);
+  --chart-5: oklch(0.62 0.18 315);
+
+  /* Sidebar — darkest named surface */
+  --sidebar:                   oklch(0.13 0.036 255);
+  --sidebar-foreground:        oklch(0.74 0.024 263);
+  --sidebar-primary:           oklch(0.93 0.012 263);
+  --sidebar-primary-foreground: oklch(0.13 0.036 255);
+  --sidebar-accent:            oklch(0.20 0.044 255);
+  --sidebar-accent-foreground: oklch(0.93 0.012 263);
+  --sidebar-border:            oklch(1 0 0 / 7%);
+  --sidebar-ring:              oklch(0.62 0.22 263);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  .dark * {
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: transparent;
+  }
+  html {
+    background: oklch(0.985 0.006 263);
+  }
+  html.dark {
+    background: oklch(0.10 0.030 255);
+  }
+}
+
+/* ── ProjectPilot Brand Utilities ────────────────────────────────────────────
+   Use these classes anywhere you need the brand gradient from the logo.
+   navy → electric-blue → purple (matches "Project Pilot" logotype gradient)
+─────────────────────────────────────────────────────────────────────────────*/
+@layer utilities {
+  /* ── Sound bar animation for voice recording ── */
+  @keyframes soundBar {
+    from { transform: scaleY(0.3); }
+    to   { transform: scaleY(1); }
+  }
+
+  /* ── Custom scrollbar — themed for light/dark ── */
+  .chat-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.870 0.025 263) transparent;
+  }
+  .dark .chat-scroll {
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
+  }
+  .chat-scroll::-webkit-scrollbar        { width: 4px; }
+  .chat-scroll::-webkit-scrollbar-track  { background: transparent; }
+  .chat-scroll::-webkit-scrollbar-thumb  {
+    border-radius: 9999px;
+    background: oklch(0.870 0.025 263);
+  }
+  .dark .chat-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+  }
+  .chat-scroll::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.55 0.22 263 / 0.45);
+  }
+  .dark .chat-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.25);
+  }
+  /* Gradient matching the logo "Pilot" text: blue → purple */
+  .brand-gradient {
+    background: linear-gradient(135deg, #2d6ef5 0%, #6b5ce7 100%);
+  }
+
+  /* Text gradient — use with bg-clip-text text-transparent */
+  .brand-text-gradient {
+    background: linear-gradient(135deg, #2d6ef5 0%, #6b5ce7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Full logo gradient: navy → blue → purple */
+  .brand-gradient-full {
+    background: linear-gradient(135deg, #1a2340 0%, #2d6ef5 50%, #6b5ce7 100%);
+  }
+
+  /* Glow shadow using brand blue */
+  .brand-glow {
+    box-shadow: 0 0 24px 0 oklch(0.55 0.22 263 / 0.30);
+  }
+
+  .brand-glow-sm {
+    box-shadow: 0 0 12px 0 oklch(0.55 0.22 263 / 0.25);
+  }
+
+  /* Subtle blue-tinted background for hero sections */
+  .brand-bg-subtle {
+    background: linear-gradient(160deg, oklch(0.985 0.012 263) 0%, oklch(0.975 0.020 270) 100%);
   }
 }
