@@ -113,6 +113,7 @@ export function DiscoveryChat() {
   const { messages, discovery, isStreaming, sendMessage, projectId } = useDiscovery()
   const [input, setInput] = useState('')
   const [isReadOnly, setIsReadOnly] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [userInitials, setUserInitials] = useState('ME')
   const [listening, setListening] = useState(false)
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
@@ -127,6 +128,10 @@ export function DiscoveryChat() {
         const name  = (user.user_metadata?.full_name as string) ?? user.email ?? ''
         const email = user.email ?? ''
         setUserInitials(getInitials(name, email))
+        
+        supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+          .then(({ data }) => setIsAdmin(!!data?.is_admin))
+
         if (projectId) {
           supabase.from('projects').select('user_id').eq('id', projectId).single()
             .then(({ data }) => {
@@ -203,6 +208,16 @@ export function DiscoveryChat() {
           <h2 className="text-sm font-semibold">AI Discovery</h2>
         </div>
         <div className="flex items-center gap-2">
+          {!isAdmin && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('trigger-summary-regen'))}
+              disabled={isStreaming}
+              className="flex items-center gap-1.5 rounded-xl bg-primary hover:bg-primary/95 text-white disabled:opacity-60 px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all active:scale-[0.98] mr-1"
+            >
+              <Sparkles className="size-3" />
+              <span>Get Summary</span>
+            </button>
+          )}
           <div className="flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1">
             <div className="size-1.5 rounded-full" style={{ background: progress >= 85 ? '#22c55e' : '#2d6ef5' }} />
             <span className="font-mono text-[10px] font-semibold">{progress}%</span>

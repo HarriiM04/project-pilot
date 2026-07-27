@@ -188,7 +188,8 @@ export async function POST(req: NextRequest) {
             { key: 'non_functional_reqs', label: 'Non-Functional Reqs', completion: scoreToNum(pillarStatus.non_functional_reqs) },
             { key: 'constraints', label: 'Constraints & Tech Stack', completion: scoreToNum(pillarStatus.constraints) }
           ],
-          suggestedOptions: parsedTurn.suggested_quick_replies || []
+          suggestedOptions: parsedTurn.suggested_quick_replies || [],
+          requirementsChanged: !!parsedTurn.requirements_changed
         }
 
         // Step 4: Enqueue sentinel payload for frontend store update
@@ -206,6 +207,29 @@ export async function POST(req: NextRequest) {
             discovery_state: compatibilityState,
           })
           .eq('id', projectId)
+
+        // If requirements changed and a kickoff report exists with 'Submitted' status, reset it to 'Draft'
+        if (parsedTurn.requirements_changed) {
+          const { data: rep } = await supabase
+            .from('kickoff_reports')
+            .select('*')
+            .eq('project_id', projectId)
+            .maybeSingle()
+
+          if (rep) {
+            const extracted = (rep.extracted_json as any) || {}
+            if (extracted.docs_metadata && extracted.docs_metadata.KICKOFF) {
+              const meta = extracted.docs_metadata.KICKOFF
+              if (meta.status === 'Submitted') {
+                meta.status = 'Draft'
+                await supabase
+                  .from('kickoff_reports')
+                  .update({ extracted_json: extracted })
+                  .eq('project_id', projectId)
+              }
+            }
+          }
+        }
 
       } catch (err: unknown) {
         const friendlyMessage = classifyGeminiError(err)
