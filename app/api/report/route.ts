@@ -220,7 +220,19 @@ export async function POST(req: NextRequest) {
       .map((doc: any) => `[File: ${doc.filename}]\n${doc.extracted_text_snippet || ''}`)
       .join('\n\n')
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
+    // Initialize Gemini API with proper authentication
+    // Use GOOGLE_API_KEY environment variable (supported by @google/genai SDK)
+    // The API key must be in AIza format from Google AI Studio, not AQ. format
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      console.error('[GEMINI] Missing API key: GOOGLE_API_KEY and GEMINI_API_KEY both undefined')
+      return new Response('API key not configured. Set GOOGLE_API_KEY environment variable.', { status: 500 })
+    }
+    
+    // Log key format for debugging (first 10 chars only, never log full key)
+    console.log(`[GEMINI] Initializing with API key format: ${apiKey.substring(0, 10)}...`)
+    
+    const ai = new GoogleGenAI({ apiKey })
 
     // Step 1: Check existing report DB entry so we preserve already generated document variations
     const { data: existingReport } = await supabase
@@ -238,6 +250,7 @@ export async function POST(req: NextRequest) {
     if (!extractedPayload.project_title || hasGrownSignificantly) {
       const extractionPrompt = buildExtractionPrompt(transcript, uploadedDocsText)
       try {
+        console.log('[GEMINI] Starting extraction with model: gemini-flash-lite-latest')
         const extractionRes = await ai.models.generateContent({
           model: 'gemini-flash-lite-latest',
           config: { responseMimeType: 'application/json' },
@@ -249,7 +262,8 @@ export async function POST(req: NextRequest) {
           ...parsed,
           last_extraction_transcript_length: transcript.length
         }
-      } catch {
+      } catch (err: unknown) {
+        console.error('[GEMINI] Extraction error:', err instanceof Error ? err.message : String(err))
         // Fallback or keep existing
         if (!extractedPayload.project_title) {
           extractedPayload.project_title = project.title || 'Software Project'
@@ -272,6 +286,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         let fullMarkdown = ''
         try {
+          console.log('[GEMINI] Starting report generation stream for docType:', docType)
           const reportStream = await ai.models.generateContentStream({
             model: 'gemini-flash-lite-latest',
             contents: [{ role: 'user', parts: [{ text: reportPrompt }] }],
@@ -284,6 +299,8 @@ export async function POST(req: NextRequest) {
               controller.enqueue(encoder.encode(text))
             }
           }
+          
+          console.log(`[GEMINI] Report generation complete for ${docType}, length: ${fullMarkdown.length}`)
 
           // Step 3: Save generated document into extracted_json.docs[docType]
           const currentDocs = (extractedPayload.docs as Record<string, string>) || {}
@@ -345,6 +362,14 @@ export async function POST(req: NextRequest) {
 
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Report generation error'
+          console.error(`[GEMINI] Stream error for ${docType}:`, msg)
+          if (err instanceof Error) {
+            console.error('[GEMINI] Full error details:', {
+              name: err.name,
+              message: err.message,
+              stack: err.stack?.substring(0, 500) // Truncate for logging
+            })
+          }
           controller.enqueue(encoder.encode(`\n\n[Error generating ${docType}: ${msg}]`))
         } finally {
           controller.close()

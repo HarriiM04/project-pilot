@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, ReactNode } from 'react'
 import {
   FileText, Sparkles, CheckCircle2, CircleDashed,
-  Loader2, Download, Zap, FileCheck2, Edit3,
+  Loader2, Download, Zap, FileCheck2, Edit3, Send,
 } from 'lucide-react'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
@@ -12,8 +12,11 @@ import { Button } from '@/components/ui/button'
 import { useDiscovery } from '@/lib/discovery-store'
 import { cn, parseAgencyDetails, type AgencyDetails } from '@/lib/utils'
 import { SendProposalDialog } from '@/components/send-proposal-dialog'
+import { ProposalEditor } from '@/components/proposal-editor'
+import { SendProposalConfirmation } from '@/components/send-proposal-confirmation'
 import { useToast } from '@/components/toast-container'
 import { createClient } from '@/lib/supabase/client'
+import type { SendProposalData } from '@/lib/discovery-store'
 
 gsap.registerPlugin(useGSAP)
 
@@ -32,7 +35,9 @@ function ReportContentFormatter({ markdown }: { markdown: string }) {
   const lines: string[] = []
   let prevEmpty = false
   for (let raw of rawLines) {
-    let cleanRaw = raw.replace(/<br\s*\/?>/gi, '')
+    // Decode HTML entities first
+    const decodedRaw = decodeHtmlEntities(raw)
+    let cleanRaw = decodedRaw.replace(/<br\s*\/?>/gi, '')
     let trimmed = cleanRaw.trim()
     if (trimmed === '') {
       if (!prevEmpty) {
@@ -201,6 +206,57 @@ const toCamelCase = (str: string): string => {
     .join('')
 }
 
+// Decode HTML entities to plain text - works in both browser and server contexts
+function decodeHtmlEntities(text: string): string {
+  if (typeof window !== 'undefined') {
+    // Browser: use textarea trick
+    const textarea = document.createElement('textarea')
+    textarea.innerHTML = text
+    return textarea.value
+  } else {
+    // Server/SSR: use basic string replacement
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+  }
+}
+
+// Convert special characters to PDF-friendly ASCII equivalents
+// This runs ONLY on PDF output - the HTML preview keeps original characters
+function sanitizeForPDF(text: string): string {
+  return text
+    // Replace arrows with ASCII equivalents (critical for jsPDF compatibility)
+    .replace(/\s*→\s*/g, ' -> ')        // Right arrow: → becomes ->
+    .replace(/\s*←\s*/g, ' <- ')        // Left arrow: ← becomes <-
+    .replace(/\s*↓\s*/g, ' [down] ')    // Down arrow
+    .replace(/\s*↑\s*/g, ' [up] ')      // Up arrow
+    .replace(/\s*↔\s*/g, ' <-> ')       // Bidirectional arrow
+    // Replace other problematic Unicode with ASCII safe equivalents
+    .replace(/\s*–\s*/g, '-')           // En dash: – becomes -
+    .replace(/\s*—\s*/g, '-')           // Em dash: — becomes -
+    .replace(/\s*•\s*/g, '* ')          // Bullet: • becomes *
+    .replace(/\s*°\s*/g, ' deg ')       // Degree symbol
+    .replace(/\s*±\s*/g, ' +/- ')       // Plus/minus
+    .replace(/\s*×\s*/g, ' x ')         // Multiplication sign
+    .replace(/\s*÷\s*/g, ' / ')         // Division sign
+    .replace(/\s*≈\s*/g, ' approx ')    // Approximately
+    .replace(/\s*≠\s*/g, ' != ')        // Not equal
+    .replace(/\s*≤\s*/g, ' <= ')        // Less than or equal
+    .replace(/\s*≥\s*/g, ' >= ')        // Greater than or equal
+    .replace(/'/g, "'")                 // Curly left single quote to straight
+    .replace(/'/g, "'")                 // Curly right single quote to straight
+    .replace(/"/g, '"')                 // Curly left double quote to straight
+    .replace(/"/g, '"')                 // Curly right double quote to straight
+    .replace(/…/g, '...')               // Ellipsis: … becomes ...
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const docTypeMap: Record<string, string> = {
   KICKOFF: 'Requirement Summary',
   BRD: 'Business Requirements Document',
@@ -359,7 +415,7 @@ function HTMLVersionHistoryTable({ history }: { history: any[] }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export function KickoffReportViewer() {
-  const { discovery, projectId, isStreaming, messages } = useDiscovery()
+  const { discovery, projectId, isStreaming, messages, proposalDraft, proposalStatus, isGeneratingProposal, isSendingProposal, generateProposal, updateProposalDraft, sendProposal } = useDiscovery()
   const { showToast } = useToast()
   const [docType, setDocType] = useState<'KICKOFF' | 'BRD' | 'PRD' | 'SRS' | 'SOW'>('KICKOFF')
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null)
@@ -372,6 +428,7 @@ export function KickoffReportViewer() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [agencyBranding, setAgencyBranding] = useState<AgencyDetails | null>(null)
+  const [showSendProposalConfirmation, setShowSendProposalConfirmation] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -596,6 +653,39 @@ export function KickoffReportViewer() {
     }
   }
 
+  const handleGenerateProposal = async () => {
+    try {
+      // Check that BRD, PRD, SOW exist
+      const docRes = await fetch(`/api/report?projectId=${projectId}&docType=BRD`)
+      const docData = await docRes.json()
+      if (!docData.exists || !docData.report?.report_markdown) {
+        showToast('BRD, PRD, and SOW are required to generate a proposal', 'error')
+        return
+      }
+
+      await generateProposal()
+      showToast('Proposal draft generated successfully', 'success')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate proposal'
+      showToast(msg, 'error')
+    }
+  }
+
+  const handleUpdateProposal = (markdown: string) => {
+    updateProposalDraft(markdown)
+  }
+
+  const handleSendProposal = async (data: SendProposalData) => {
+    try {
+      await sendProposal(data)
+      showToast('Proposal sent successfully!', 'success')
+      setShowSendProposalConfirmation(false)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to send proposal'
+      showToast(msg, 'error')
+    }
+  }
+
   const handleDownload = async () => {
     if (!reportMarkdown || isDownloading) return
     setIsDownloading(true)
@@ -763,10 +853,10 @@ export function KickoffReportViewer() {
         
         // 1. Analyze text length for each column
         const colMaxLens = headers.map((h, cIdx) => {
-          let maxLen = h.trim().length
+          let maxLen = decodeHtmlEntities(h.trim()).length
           rows.forEach(row => {
             if (row[cIdx]) {
-              const val = row[cIdx].trim().replace(/\*\*(.*?)\*\*/g, '$1')
+              const val = decodeHtmlEntities(row[cIdx].trim()).replace(/\*\*(.*?)\*\*/g, '$1')
               maxLen = Math.max(maxLen, val.length)
             }
           })
@@ -804,7 +894,7 @@ export function KickoffReportViewer() {
         if (rows.length > 0) {
           const firstRow = rows[0]
           const firstRowLines = firstRow.map((cell, cIdx) => {
-            const txt = (cell || '').trim().replace(/\*\*(.*?)\*\*/g, '$1')
+            const txt = decodeHtmlEntities((cell || '').trim()).replace(/\*\*(.*?)\*\*/g, '$1')
             let cellLines: string[] = []
             if (txt.includes('•')) {
               const parts = txt.split('•').map(p => p.trim()).filter(Boolean)
@@ -837,7 +927,7 @@ export function KickoffReportViewer() {
         
         headers.forEach((h, i) => {
           let colStartX = tableStartX + colWidths.slice(0, i).reduce((sum, w) => sum + w, 0)
-          doc.text(h.trim(), colStartX + 2.5, y + headerTextY)
+          doc.text(sanitizeForPDF(decodeHtmlEntities(h.trim())), colStartX + 2.5, y + headerTextY)
         })
 
         // Draw vertical borders for headers
@@ -858,7 +948,7 @@ export function KickoffReportViewer() {
         rows.forEach((row, rIdx) => {
           // Analyze cell lines and determine max row height (splitting inline bullets)
           const cellLinesList = row.map((cell, cIdx) => {
-            const txt = (cell || '').trim().replace(/\*\*(.*?)\*\*/g, '$1')
+            const txt = decodeHtmlEntities((cell || '').trim()).replace(/\*\*(.*?)\*\*/g, '$1')
             let cellLines: string[] = []
             if (txt.includes('•')) {
               const parts = txt.split('•').map(p => p.trim()).filter(Boolean)
@@ -895,7 +985,7 @@ export function KickoffReportViewer() {
             doc.setTextColor(255, 255, 255)
             headers.forEach((h, i) => {
               let colStartX = tableStartX + colWidths.slice(0, i).reduce((sum, w) => sum + w, 0)
-              doc.text(h.trim(), colStartX + 2.5, y + headerTextY)
+              doc.text(sanitizeForPDF(decodeHtmlEntities(h.trim())), colStartX + 2.5, y + headerTextY)
             })
 
             // Redraw header vertical dividers
@@ -928,7 +1018,7 @@ export function KickoffReportViewer() {
             doc.setTextColor(55, 65, 81)
             const lines = cellLinesList[cIdx]
             lines.forEach((line, lineIdx) => {
-              doc.text(line, colStartX + 2.5, rowY + textStartY + lineIdx * lineSpacing)
+              doc.text(sanitizeForPDF(line), colStartX + 2.5, rowY + textStartY + lineIdx * lineSpacing)
             })
             colStartX += colWidths[cIdx]
           })
@@ -964,7 +1054,9 @@ export function KickoffReportViewer() {
       const lines: string[] = []
       let prevEmpty = false
       for (let raw of rawLines) {
-        let cleanRaw = raw.replace(/<br\s*\/?>/gi, '')
+        // Decode HTML entities first
+        const decodedRaw = decodeHtmlEntities(raw)
+        let cleanRaw = decodedRaw.replace(/<br\s*\/?>/gi, '')
         let trimmed = cleanRaw.trim()
         if (trimmed === '') {
           if (!prevEmpty) {
@@ -1012,7 +1104,7 @@ export function KickoffReportViewer() {
                   
                   doc.setFont('helvetica', 'normal')
                   doc.setTextColor(55, 65, 81)
-                  const cleanVal = cellVal.replace(/\*\*(.*?)\*\*/g, '$1')
+                  const cleanVal = sanitizeForPDF(decodeHtmlEntities(cellVal)).replace(/\*\*(.*?)\*\*/g, '$1')
                   
                   if (cleanVal.includes('•')) {
                     const parts = cleanVal.split('•').map(p => p.trim()).filter(Boolean)
@@ -1068,7 +1160,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(15)
           doc.setTextColor(26, 35, 64)
-          const txt = line.slice(2)
+          const txt = sanitizeForPDF(line.slice(2))
           const split = doc.splitTextToSize(txt, maxW)
           doc.text(split, marginL, y)
           y += split.length * 7 + 2
@@ -1094,7 +1186,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(11.5)
           doc.setTextColor(45, 110, 245)
-          const txt = line.slice(3)
+          const txt = sanitizeForPDF(line.slice(3))
           const split = doc.splitTextToSize(txt, maxW)
           doc.text(split, marginL, y)
           y += split.length * 6 + 3
@@ -1108,7 +1200,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(10.5)
           doc.setTextColor(26, 35, 64)
-          const txt = line.slice(4)
+          const txt = sanitizeForPDF(line.slice(4))
           const split = doc.splitTextToSize(txt, maxW)
           doc.text(split, marginL, y)
           y += split.length * 5.5 + 2
@@ -1122,7 +1214,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(9.5)
           doc.setTextColor(55, 65, 81)
-          const clean = line.slice(2).replace(/\*\*(.*?)\*\*/g, '$1')
+          const clean = sanitizeForPDF(decodeHtmlEntities(line.slice(2))).replace(/\*\*(.*?)\*\*/g, '$1')
           
           if (clean.includes('•')) {
             const parts = clean.split('•').map(p => p.trim()).filter(Boolean)
@@ -1147,7 +1239,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(9.5)
           doc.setTextColor(55, 65, 81)
-          const clean = line.replace(/\*\*(.*?)\*\*/g, '$1')
+          const clean = sanitizeForPDF(decodeHtmlEntities(line)).replace(/\*\*(.*?)\*\*/g, '$1')
           
           if (clean.includes('•')) {
             const parts = clean.split('•').map(p => p.trim()).filter(Boolean)
@@ -1305,7 +1397,31 @@ export function KickoffReportViewer() {
             <p className="font-mono text-[10px] tracking-widest text-white/40">PREPARING {docType} DOCUMENT</p>
           </div>
         </div>
-      )}      <style>{`
+      )}
+
+      {/* ── Proposal Editor Modal ── */}
+      {proposalStatus === 'draft' && proposalDraft && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/40 backdrop-blur-sm">
+          <div className="min-h-screen flex items-start justify-center pt-4 pb-4">
+            <div className="w-full max-w-3xl rounded-2xl bg-background shadow-2xl">
+              <ProposalEditor
+                projectId={projectId}
+                initialMarkdown={proposalDraft}
+                onSend={() => setShowSendProposalConfirmation(true)}
+                isSending={isSendingProposal}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send Proposal Confirmation Dialog ── */}
+      <SendProposalConfirmation
+        open={showSendProposalConfirmation}
+        onOpenChange={setShowSendProposalConfirmation}
+        onConfirm={handleSendProposal}
+        isLoading={isSendingProposal}
+      />      <style>{`
         @media print {
           body, html, #__next, main, section, article {
             height: auto !important; max-height: none !important;
@@ -1447,6 +1563,21 @@ export function KickoffReportViewer() {
                         <CheckCircle2 className="size-3" />
                       )}
                       <span>Approve Report</span>
+                    </button>
+                  )}
+                  {/* Generate Proposal Button - Show when BRD, PRD, SOW exist */}
+                  {docType === 'KICKOFF' && !proposalDraft && (
+                    <button
+                      onClick={handleGenerateProposal}
+                      disabled={isGeneratingProposal}
+                      className="flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all active:scale-[0.98]"
+                    >
+                      {isGeneratingProposal ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Send className="size-3" />
+                      )}
+                      <span>{isGeneratingProposal ? 'Generating...' : 'Generate Proposal'}</span>
                     </button>
                   )}
                   {isAdmin && (

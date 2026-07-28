@@ -24,6 +24,7 @@ export function SendProposalDialog({
 }) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
+  const [clientName, setClientName] = useState('')
   const [cost, setCost] = useState('')
   const [timeline, setTimeline] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -42,6 +43,7 @@ export function SendProposalDialog({
         body: JSON.stringify({
           projectId,
           clientEmail: email,
+          clientName: clientName || 'Valued Client',
           costEstimate: cost,
           timelineEstimate: timeline,
           reportMarkdown,
@@ -59,6 +61,7 @@ export function SendProposalDialog({
         setOpen(false)
         setSuccess(false)
         setEmail('')
+        setClientName('')
         setCost('')
         setTimeline('')
       }, 2000)
@@ -97,6 +100,20 @@ export function SendProposalDialog({
               </div>
             ) : (
               <>
+                <div className="grid gap-2">
+                  <label htmlFor="clientName" className="text-sm font-medium">
+                    Client Name
+                  </label>
+                  <input
+                    id="clientName"
+                    type="text"
+                    required
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="John Doe"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
                 <div className="grid gap-2">
                   <label htmlFor="email" className="text-sm font-medium">
                     Client Email

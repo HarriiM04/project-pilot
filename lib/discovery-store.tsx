@@ -52,8 +52,25 @@ interface DiscoveryContextValue {
   isStreaming: boolean
   isLoading: boolean
   projectId: string
+  // Proposal state management
+  proposalDraft: string | null
+  proposalStatus: 'none' | 'draft' | 'sent' // none = not generated, draft = editing, sent = finalized
+  isGeneratingProposal: boolean
+  isSendingProposal: boolean
   sendMessage: (content: string) => Promise<void>
   updateFeatureName: (id: string, name: string) => void
+  generateProposal: () => Promise<void>
+  updateProposalDraft: (markdown: string) => void
+  sendProposal: (data: SendProposalData) => Promise<void>
+  resetProposal: () => void
+}
+
+export interface SendProposalData {
+  clientEmail: string
+  finalCost: string
+  estimatedTimeline: string
+  expiryDate?: string
+  personalMessage?: string
 }
 
 const DiscoveryContext = createContext<DiscoveryContextValue | null>(null)
@@ -72,6 +89,11 @@ export function DiscoveryProvider({
   const [discovery, setDiscovery] = useState<DiscoveryState>(BLANK_DISCOVERY)
   const [isStreaming, setIsStreaming] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  // Proposal state
+  const [proposalDraft, setProposalDraft] = useState<string | null>(null)
+  const [proposalStatus, setProposalStatus] = useState<'none' | 'draft' | 'sent'>('none')
+  const [isGeneratingProposal, setIsGeneratingProposal] = useState(false)
+  const [isSendingProposal, setIsSendingProposal] = useState(false)
   const idRef = useRef(0)
 
   const nextId = useCallback((prefix: string) => {
@@ -108,6 +130,16 @@ export function DiscoveryProvider({
             }),
           )
           setMessages([WELCOME_MESSAGE, ...chatMessages])
+        }
+
+        // Load existing proposal if present
+        const proposalRes = await fetch(`/api/projects/${projectId}/proposal`)
+        if (proposalRes.ok) {
+          const proposalData = await proposalRes.json()
+          if (proposalData.proposal) {
+            setProposalDraft(proposalData.proposal.proposal_markdown)
+            setProposalStatus(proposalData.proposal.status)
+          }
         }
       } catch {
         // Keep blank defaults — user will start fresh
@@ -279,6 +311,81 @@ export function DiscoveryProvider({
     [projectId, supabase],
   )
 
+  // ── Proposal generation ────────────────────────────────────────────────
+  const generateProposal = useCallback(async () => {
+    setIsGeneratingProposal(true)
+    try {
+      const res = await fetch('/api/proposal/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+
+      const data = await res.json()
+      setProposalDraft(data.proposalDraft)
+      setProposalStatus('draft')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      throw new Error(`Failed to generate proposal: ${msg}`)
+    } finally {
+      setIsGeneratingProposal(false)
+    }
+  }, [projectId])
+
+  // ── Update proposal draft locally ────────────────────────────────────────
+  const updateProposalDraft = useCallback((markdown: string) => {
+    setProposalDraft(markdown)
+  }, [])
+
+  // ── Send proposal ────────────────────────────────────────────────────────
+  const sendProposal = useCallback(
+    async (data: SendProposalData) => {
+      if (!proposalDraft) throw new Error('No proposal draft to send')
+
+      setIsSendingProposal(true)
+      try {
+        const res = await fetch('/api/proposal/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            clientEmail: data.clientEmail,
+            clientName: data.clientName,
+            finalCost: data.finalCost,
+            estimatedTimeline: data.estimatedTimeline,
+            expiryDate: data.expiryDate,
+            personalMessage: data.personalMessage,
+            proposalMarkdown: proposalDraft,
+          }),
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(text || `HTTP ${res.status}`)
+        }
+
+        setProposalStatus('sent')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        throw new Error(`Failed to send proposal: ${msg}`)
+      } finally {
+        setIsSendingProposal(false)
+      }
+    },
+    [projectId, proposalDraft]
+  )
+
+  // ── Reset proposal ────────────────────────────────────────────────────────
+  const resetProposal = useCallback(() => {
+    setProposalDraft(null)
+    setProposalStatus('none')
+  }, [])
+
   const value = useMemo(
     () => ({
       messages,
@@ -288,8 +395,33 @@ export function DiscoveryProvider({
       projectId,
       sendMessage,
       updateFeatureName,
+      // Proposal state
+      proposalDraft,
+      proposalStatus,
+      isGeneratingProposal,
+      isSendingProposal,
+      generateProposal,
+      updateProposalDraft,
+      sendProposal,
+      resetProposal,
     }),
-    [messages, discovery, isStreaming, isLoading, projectId, sendMessage, updateFeatureName],
+    [
+      messages,
+      discovery,
+      isStreaming,
+      isLoading,
+      projectId,
+      sendMessage,
+      updateFeatureName,
+      proposalDraft,
+      proposalStatus,
+      isGeneratingProposal,
+      isSendingProposal,
+      generateProposal,
+      updateProposalDraft,
+      sendProposal,
+      resetProposal,
+    ],
   )
 
   return (

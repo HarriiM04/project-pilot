@@ -115,12 +115,21 @@ export async function POST(req: NextRequest) {
     project.completeness_score || 0
   )
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
+  // Initialize Gemini API with proper authentication
+  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    console.error('[GEMINI] Missing API key: GOOGLE_API_KEY and GEMINI_API_KEY both undefined')
+    return new Response('API key not configured. Set GOOGLE_API_KEY environment variable.', { status: 500 })
+  }
+
+  console.log(`[GEMINI] Chat: Initializing with API key format: ${apiKey.substring(0, 10)}...`)
+  const ai = new GoogleGenAI({ apiKey })
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        console.log('[GEMINI] Chat: Starting discovery turn with model: gemini-flash-lite-latest')
         const turnResult = await ai.models.generateContent({
           model: 'gemini-flash-lite-latest',
           config: {
@@ -131,11 +140,13 @@ export async function POST(req: NextRequest) {
         })
 
         const jsonText = turnResult.text ?? ''
+        console.log(`[GEMINI] Chat: Received response length: ${jsonText.length}`)
         let parsedTurn: DiscoveryTurnResponse | null = null
 
         try {
           parsedTurn = JSON.parse(jsonText) as DiscoveryTurnResponse
-        } catch {
+        } catch (parseErr) {
+          console.error('[GEMINI] Chat: JSON parse error:', parseErr instanceof Error ? parseErr.message : String(parseErr))
           // Fallback if JSON parsing fails
           parsedTurn = {
             completeness_score: project.completeness_score || 10,
@@ -232,6 +243,14 @@ export async function POST(req: NextRequest) {
         }
 
       } catch (err: unknown) {
+        console.error('[GEMINI] Chat error:', err instanceof Error ? err.message : String(err))
+        if (err instanceof Error) {
+          console.error('[GEMINI] Full error details:', {
+            name: err.name,
+            message: err.message,
+            stack: err.stack?.substring(0, 500)
+          })
+        }
         const friendlyMessage = classifyGeminiError(err)
         controller.enqueue(encoder.encode(friendlyMessage))
       } finally {

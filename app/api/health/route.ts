@@ -28,17 +28,29 @@ export async function GET() {
 
   // ── 2. Gemini API ───────────────────────────────────────────
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
-    const response = await ai.models.generateContent({
-      model: 'gemini-flash-lite-latest',
-      contents: 'Reply with just the word: CONNECTED',
-    })
-    const text = response.text?.trim()
-    results.gemini = { ok: true, message: 'Gemini API reachable', response: text }
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      results.gemini = {
+        ok: false,
+        error: 'Missing API key: GOOGLE_API_KEY and GEMINI_API_KEY both undefined. Set GOOGLE_API_KEY environment variable with a valid Gemini API key (AIza format, not AQ. format).',
+      }
+    } else {
+      console.log(`[GEMINI] Health check: Testing with API key format: ${apiKey.substring(0, 10)}...`)
+      const ai = new GoogleGenAI({ apiKey })
+      const response = await ai.models.generateContent({
+        model: 'gemini-flash-lite-latest',
+        contents: 'Reply with just the word: CONNECTED',
+      })
+      const text = response.text?.trim()
+      results.gemini = { ok: true, message: 'Gemini API reachable', response: text }
+    }
   } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown Gemini error'
+    console.error('[GEMINI] Health check failed:', errorMsg)
     results.gemini = {
       ok: false,
-      error: err instanceof Error ? err.message : 'Unknown Gemini error',
+      error: errorMsg,
+      hint: 'Ensure GOOGLE_API_KEY environment variable is set with a valid API key from Google AI Studio (AIza format, NOT AQ. format which is OAuth-based)',
     }
   }
 

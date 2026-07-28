@@ -1,0 +1,317 @@
+# Proposal PDF Generator & Email System
+
+Complete modular system for generating professional proposal PDFs and sending them via branded email templates.
+
+## Architecture
+
+Three independent, testable modules:
+
+1. **`proposal-pdf-generator.ts`** — Generates a clean, professional PDF from structured project data
+2. **`proposal-email-template.ts`** — Creates a branded HTML email template with inline CSS (Gmail/Outlook/Apple Mail compatible)
+3. **`send-proposal.ts`** — Unified function orchestrating PDF generation, email rendering, and Resend delivery
+
+Plus an API endpoint (`/api/proposal-mailer`) for easy HTTP integration.
+
+---
+
+## Data Structures
+
+### ProjectData
+```typescript
+interface ProjectData {
+  project_name: string           // "E-Commerce Platform Redesign"
+  subtitle?: string              // "Mobile-first, high-performance"
+  estimated_cost: string         // "$15,000 - $20,000"
+  estimated_timeline: string     // "8-10 weeks"
+  sections: Section[]
+}
+```
+
+### Section
+```typescript
+interface Section {
+  heading: string                // "Discovery & Strategy"
+  text?: string                  // Description paragraph
+  bullets?: (string | BulletItem)[]
+}
+```
+
+### BulletItem (optional bold labels)
+```typescript
+interface BulletItem {
+  label: string                  // "Requirements Gathering"
+  text: string                   // "Conduct stakeholder interviews..."
+}
+```
+
+### AgencyConfig
+```typescript
+interface AgencyConfig {
+  name: string                   // "Acme Design Co."
+  email: string                  // "hello@acmedesign.com"
+  calendlyLink: string           // "https://calendly.com/acmedesign"
+  primaryColor: string           // "#2d6ef5"
+  logo?: string                  // Optional: Base64-encoded logo
+}
+```
+
+---
+
+## Usage Examples
+
+### 1. Send Complete Proposal (PDF + Email)
+
+```typescript
+import { sendProposal } from '@/lib/send-proposal'
+
+const result = await sendProposal({
+  projectData: {
+    project_name: "E-Commerce Platform",
+    subtitle: "Mobile-first redesign",
+    estimated_cost: "$25,000",
+    estimated_timeline: "12 weeks",
+    sections: [
+      {
+        heading: "Discovery & Strategy",
+        text: "We'll conduct a thorough analysis of your current platform...",
+        bullets: [
+          "User research interviews",
+          "Competitive analysis",
+          "Information architecture audit"
+        ]
+      },
+      {
+        heading: "Design & Development",
+        bullets: [
+          { label: "UI/UX Design", text: "Modern, mobile-first interface" },
+          { label: "Frontend", text: "React with TypeScript" },
+          { label: "Backend", text: "Node.js + PostgreSQL" }
+        ]
+      }
+    ]
+  },
+  clientEmail: "john@clientcompany.com",
+  clientName: "John Smith",
+  agencyConfig: {
+    name: "Acme Design Co.",
+    email: "hello@acmedesign.com",
+    calendlyLink: "https://calendly.com/acmedesign",
+    primaryColor: "#2d6ef5"
+  },
+  proposalLink: "https://app.acmedesign.com/proposals/abc123",
+  includeAttachment: true
+})
+
+if (result.success) {
+  console.log("Proposal sent!", result.emailId)
+} else {
+  console.error("Failed:", result.message)
+}
+```
+
+### 2. Generate PDF Only (for download/preview)
+
+```typescript
+import { generateProposalPDFOnly } from '@/lib/send-proposal'
+
+const pdfBuffer = await generateProposalPDFOnly({
+  project_name: "My Project",
+  estimated_cost: "$10,000",
+  estimated_timeline: "6 weeks",
+  sections: [...]
+})
+
+// Save to file system or send as HTTP response
+res.setHeader('Content-Type', 'application/pdf')
+res.setHeader('Content-Disposition', 'attachment; filename="proposal.pdf"')
+res.send(pdfBuffer)
+```
+
+### 3. Render Email Only (for testing/preview)
+
+```typescript
+import { renderProposalEmailOnly } from '@/lib/send-proposal'
+
+const htmlEmail = await renderProposalEmailOnly(
+  projectData,
+  "John Smith",
+  agencyConfig,
+  "https://app.acmedesign.com/proposals/abc123"
+)
+
+// Open in browser or send to email preview service
+```
+
+### 4. Via HTTP API
+
+```bash
+curl -X POST http://localhost:3000/api/proposal-mailer \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectData": {
+      "project_name": "E-Commerce Platform",
+      "estimated_cost": "$25,000",
+      "estimated_timeline": "12 weeks",
+      "sections": [...]
+    },
+    "clientEmail": "john@clientcompany.com",
+    "clientName": "John Smith",
+    "agencyConfig": {
+      "name": "Acme Design Co.",
+      "email": "hello@acmedesign.com",
+      "calendlyLink": "https://calendly.com/acmedesign",
+      "primaryColor": "#2d6ef5"
+    },
+    "proposalLink": "https://app.acmedesign.com/proposals/abc123"
+  }'
+```
+
+---
+
+## PDF Features
+
+✅ Professional formatting with navy headers and electric blue accents  
+✅ "Project Estimates" highlight box (cost + timeline)  
+✅ Multi-section Scope of Work with nested bullets  
+✅ Bold-label bullets for structured deliverables (e.g., "Requirements Gathering: ...")  
+✅ Automatic page breaks and page numbering  
+✅ Footer credit: "Generated by ProjectPilot — from idea to kickoff, instantly."
+
+---
+
+## Email Template Features
+
+✅ Branded header with agency name and tagline  
+✅ Personalized greeting with client name  
+✅ Project description + reference to attached PDF  
+✅ 3 stat cards: Timeline, Budget, Key Deliverables  
+✅ CTA button "View Full Proposal" (linked)  
+✅ Secondary CTA: "Book a call" via Calendly + reply option  
+✅ Footer with agency branding and social links  
+✅ 100% Gmail/Outlook/Apple Mail compatible (table-based, inline CSS)  
+✅ Mobile responsive: single-column stack under 600px
+
+---
+
+## Email Template Variables
+
+All variables are left as `{{PLACEHOLDER}}` tokens in the template. Replace via `renderEmailTemplate()`:
+
+| Placeholder | Example |
+|---|---|
+| `{{CLIENT_NAME}}` | "John Smith" |
+| `{{PROJECT_NAME}}` | "E-Commerce Platform" |
+| `{{PROPOSAL_LINK}}` | "https://app.acmedesign.com/proposals/abc123" |
+| `{{CALENDLY_LINK}}` | "https://calendly.com/acmedesign" |
+| `{{AGENCY_NAME}}` | "Acme Design Co." |
+| `{{AGENCY_EMAIL}}` | "hello@acmedesign.com" |
+| `{{ESTIMATED_COST}}` | "$25,000" |
+| `{{ESTIMATED_TIMELINE}}` | "12 weeks" |
+| `{{KEY_DELIVERABLES}}` | "4 phases" |
+| `{{PRIMARY_COLOR}}` | "#2d6ef5" |
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required for sending emails
+RESEND_API_KEY=re_xxxxxxxxxxxx
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+```
+
+### Optional Customization
+
+**PDF Styling:**
+- Edit margin, colors, and fonts in `proposal-pdf-generator.ts`
+- Current colors: Navy (#1a2340), Electric Blue (#2d6ef5), Gray tones
+
+**Email Styling:**
+- Edit colors, spacing, and layout in `proposal-email-template.ts`
+- Use CSS media queries for mobile (already included)
+
+---
+
+## Error Handling
+
+All functions return structured results:
+
+```typescript
+interface SendProposalResult {
+  success: boolean
+  message: string        // Human-readable message
+  emailId?: string       // Resend email ID (on success)
+  error?: string         // Error code (on failure)
+}
+```
+
+Error codes:
+- `INVALID_INPUT` — Missing or malformed required fields
+- `CONFIG_ERROR` — Missing environment variables
+- `SEND_FAILED` — Resend API error
+- `SERVER_ERROR` — Unexpected exception
+
+---
+
+## Testing
+
+### Test PDF Generation
+```typescript
+const projectData = {
+  project_name: "Test Project",
+  estimated_cost: "$10,000",
+  estimated_timeline: "4 weeks",
+  sections: [
+    { heading: "Phase 1", text: "Discovery", bullets: ["Research", "Planning"] }
+  ]
+}
+
+const pdf = await generateProposalPDFOnly(projectData)
+console.log(`PDF size: ${pdf.length} bytes`)
+```
+
+### Test Email Rendering
+```typescript
+const html = await renderProposalEmailOnly(
+  projectData,
+  "Test Client",
+  agencyConfig,
+  "https://example.com"
+)
+
+// Inspect HTML or open in browser
+console.log(html.substring(0, 500))
+```
+
+### Test Full Workflow (without sending)
+Set `includeAttachment: false` to generate PDF + email without actually sending:
+```typescript
+const result = await sendProposal({
+  ...input,
+  includeAttachment: false  // Don't attach PDF, just render
+})
+```
+
+---
+
+## Deployment Notes
+
+- **jsPDF**: Already included in `package.json`
+- **Resend**: Already configured and used elsewhere in the project
+- **No database**: This module is stateless; store proposal history in your DB if needed
+- **PDF generation is CPU-bound**: Consider caching or async queuing for high volume
+
+---
+
+## Future Enhancements
+
+- [ ] Add custom logo to PDF header
+- [ ] Support different PDF templates (minimal, detailed, technical)
+- [ ] Add proposal versioning (v1, v1.1, etc.)
+- [ ] Store sent proposals in Supabase with tracking
+- [ ] Track email opens via Resend webhooks
+- [ ] Add digital signature field to PDF
+- [ ] Support proposal expiration dates
+- [ ] Generate proposal preview (no email send)
