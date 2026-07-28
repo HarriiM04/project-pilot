@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, MessagesSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { LayoutDashboard, MessagesSquare } from 'lucide-react'
 import { useState } from 'react'
 import { AppHeader } from '@/components/app-header'
 import { AppSidebar } from '@/components/app-sidebar'
@@ -15,10 +15,11 @@ import { useRef } from 'react'
 
 gsap.registerPlugin(useGSAP)
 
-function WorkspaceInner() {
+function WorkspaceInner({ isAdmin }: { isAdmin: boolean }) {
   const { discovery, isLoading } = useDiscovery()
   const [mobileView, setMobileView] = useState<'chat' | 'docs'>('chat')
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const mainRef = useRef<HTMLDivElement>(null)
 
   useGSAP(() => {
@@ -33,7 +34,7 @@ function WorkspaceInner() {
   return (
     <div className="relative flex h-dvh w-full overflow-hidden bg-background text-foreground print:h-auto print:overflow-visible">
 
-      {/* ── Loading overlay — covers full screen including sidebar ── */}
+      {/* ── Loading overlay ── */}
       {isLoading && (
         <div
           className="absolute inset-0 z-[60] flex items-center justify-center print:hidden"
@@ -58,10 +59,28 @@ function WorkspaceInner() {
         </div>
       )}
 
-      {/* ── Sidebar ── */}
-      <div className="print:hidden">
-        <AppSidebar collapsed={collapsed} onCollapse={setCollapsed} />
-      </div>
+      {/* ── Sidebar — hidden for admin, mobile drawer for regular users ── */}
+      {!isAdmin && (
+        <>
+          {/* Desktop sidebar */}
+          <div className="hidden md:block print:hidden">
+            <AppSidebar collapsed={collapsed} onCollapse={setCollapsed} />
+          </div>
+
+          {/* Mobile drawer */}
+          {mobileMenuOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-[199] bg-black/50 backdrop-blur-sm md:hidden animate-in fade-in duration-200"
+                onClick={() => setMobileMenuOpen(false)}
+              />
+              <div className="fixed left-0 top-0 bottom-0 z-[200] w-72 md:hidden animate-in slide-in-from-left duration-300">
+                <AppSidebar collapsed={false} onCollapse={() => setMobileMenuOpen(false)} />
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       {/* ── Main ── */}
       <div className="relative flex min-w-0 flex-1 flex-col print:h-auto print:overflow-visible">
@@ -73,6 +92,8 @@ function WorkspaceInner() {
             domain={discovery.domain || 'Discovery in progress…'}
             collapsed={collapsed}
             onCollapse={setCollapsed}
+            isAdmin={isAdmin}
+            onMobileMenuOpen={() => setMobileMenuOpen(true)}
           />
         </div>
 
@@ -104,14 +125,12 @@ function WorkspaceInner() {
 
         {/* Split view */}
         <main ref={mainRef} className="flex min-h-0 flex-1 print:h-auto print:overflow-visible">
-          {/* Chat panel — bg-background (mid navy) */}
           <div className={cn(
             'min-w-0 flex-1 border-r border-border lg:block lg:max-w-[46%] print:hidden bg-background',
             mobileView === 'chat' ? 'block' : 'hidden'
           )}>
             <DiscoveryChat />
           </div>
-          {/* Report panel — bg-card (lighter, visually elevated) */}
           <div className={cn(
             'min-w-0 flex-1 lg:block print:w-full print:block print:overflow-visible print:h-auto bg-card',
             mobileView === 'docs' ? 'block' : 'hidden'
@@ -124,11 +143,11 @@ function WorkspaceInner() {
   )
 }
 
-export function WorkspaceShell({ projectId }: { projectId: string }) {
+export function WorkspaceShell({ projectId, isAdmin = false }: { projectId: string; isAdmin?: boolean }) {
   return (
     <DiscoveryProvider projectId={projectId}>
       <ErrorBoundary>
-        <WorkspaceInner />
+        <WorkspaceInner isAdmin={isAdmin} />
       </ErrorBoundary>
     </DiscoveryProvider>
   )

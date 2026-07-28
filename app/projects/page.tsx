@@ -12,6 +12,7 @@ import {
   User,
   ChevronDown,
   Mail,
+  Menu,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'

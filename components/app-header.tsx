@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, LogOut, Share2, Sparkles, Check, Mail, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronRight, LogOut, Share2, Sparkles, Check, Mail, PanelLeftClose, PanelLeftOpen, ShieldCheck, ArrowLeft, Menu } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/lib/supabase/client'
@@ -14,9 +14,11 @@ interface AppHeaderProps {
   domain: string
   collapsed: boolean
   onCollapse: (v: boolean) => void
+  isAdmin?: boolean
+  onMobileMenuOpen?: () => void
 }
 
-export function AppHeader({ projectName, domain, collapsed, onCollapse }: AppHeaderProps) {
+export function AppHeader({ projectName, domain, collapsed, onCollapse, isAdmin = false, onMobileMenuOpen }: AppHeaderProps) {
   const router = useRouter()
   const supabase = createClient()
   const { showToast } = useToast()
@@ -55,30 +57,55 @@ export function AppHeader({ projectName, domain, collapsed, onCollapse }: AppHea
     <>
       <header className="relative z-50 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl md:px-6">
 
-        {/* Collapse toggle + Breadcrumb */}
+        {/* Left — admin back button OR sidebar collapse + breadcrumb */}
         <div className="flex min-w-0 items-center gap-2">
-          <button
-            onClick={() => onCollapse(!collapsed)}
-            className="hidden md:flex items-center justify-center size-8 rounded-xl border border-border text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground hover:bg-muted cursor-pointer"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-          </button>
-
-          <nav className="flex min-w-0 items-center gap-1.5 text-sm">
+          {isAdmin ? (
+            /* Admin mode — "Admin Dashboard" button */
             <button
-              onClick={() => router.push('/projects')}
-              className="hidden cursor-pointer text-muted-foreground transition-colors hover:text-foreground sm:inline"
+              onClick={() => router.push('/admin')}
+              className="relative flex items-center gap-2 overflow-hidden rounded-xl px-3.5 py-1.5 text-sm font-semibold text-white transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98] cursor-pointer before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-700 hover:before:translate-x-full"
+              style={{ background: 'linear-gradient(135deg, #1a2340 0%, #2d6ef5 60%, #6b5ce7 100%)' }}
             >
-              Projects
+              <ArrowLeft className="size-4 shrink-0" />
+              <span className="hidden sm:inline">Admin Dashboard</span>
             </button>
-            <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground/50 sm:inline" />
-            <span className="truncate font-semibold text-foreground">{projectName}</span>
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
-            <span className="hidden font-mono text-[10px] tracking-widest text-muted-foreground sm:inline">
-              DISCOVERY
-            </span>
-          </nav>
+          ) : (
+            /* Normal mode — hamburger (mobile) + collapse toggle (desktop) + breadcrumb */
+            <>
+              {/* Mobile hamburger */}
+              <button
+                onClick={() => onMobileMenuOpen?.()}
+                className="flex md:hidden items-center justify-center size-8 rounded-xl border border-border text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground hover:bg-muted cursor-pointer"
+                aria-label="Open sidebar"
+              >
+                <Menu className="size-4" />
+              </button>
+
+              {/* Desktop collapse toggle */}
+              <button
+                onClick={() => onCollapse(!collapsed)}
+                className="hidden md:flex items-center justify-center size-8 rounded-xl border border-border text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground hover:bg-muted cursor-pointer"
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              </button>
+
+              <nav className="flex min-w-0 items-center gap-1.5 text-sm">
+                <button
+                  onClick={() => router.push('/projects')}
+                  className="hidden cursor-pointer text-muted-foreground transition-colors hover:text-foreground sm:inline"
+                >
+                  Projects
+                </button>
+                <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground/50 sm:inline" />
+                <span className="truncate font-semibold text-foreground">{projectName}</span>
+                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
+                <span className="hidden font-mono text-[10px] tracking-widest text-muted-foreground sm:inline">
+                  DISCOVERY
+                </span>
+              </nav>
+            </>
+          )}
         </div>
 
         {/* Right side */}
@@ -90,13 +117,15 @@ export function AppHeader({ projectName, domain, collapsed, onCollapse }: AppHea
             </span>
           )}
 
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground cursor-pointer"
-          >
-            {copied ? <Check className="size-3.5 text-green-500" /> : <Share2 className="size-3.5" />}
-            <span className="hidden sm:inline">{copied ? 'Copied!' : 'Share'}</span>
-          </button>
+          {!isAdmin && (
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground cursor-pointer"
+            >
+              {copied ? <Check className="size-3.5 text-green-500" /> : <Share2 className="size-3.5" />}
+              <span className="hidden sm:inline">{copied ? 'Copied!' : 'Share'}</span>
+            </button>
+          )}
 
           <ThemeToggle />
 
@@ -131,15 +160,17 @@ export function AppHeader({ projectName, domain, collapsed, onCollapse }: AppHea
                       </div>
                     </div>
                   </div>
-                  <div className="p-1.5">
-                    <button
-                      onClick={() => { setIsOpen(false); setShowLogoutConfirm(true) }}
-                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
-                    >
-                      <LogOut className="size-4" />
-                      Sign out
-                    </button>
-                  </div>
+                  {!isAdmin && (
+                    <div className="p-1.5">
+                      <button
+                        onClick={() => { setIsOpen(false); setShowLogoutConfirm(true) }}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                      >
+                        <LogOut className="size-4" />
+                        Sign out
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

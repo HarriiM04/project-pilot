@@ -35,5 +35,5 @@ export default async function WorkspacePage({ params }: Props) {
     redirect('/projects')
   }
 
-  return <WorkspaceShell projectId={projectId} />
+  return <WorkspaceShell projectId={projectId} isAdmin={isAdmin} />
 }
