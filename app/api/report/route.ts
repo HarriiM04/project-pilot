@@ -4,9 +4,33 @@ import { createClient } from '@/lib/supabase/server'
 import { buildExtractionPrompt } from '@/lib/prompts/extraction'
 import { getPromptForDocType } from '@/lib/prompts/kickoff-report'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { parseAgencyDetails } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
+
+// Helper: format Date as "DD Month YYYY"
+function formatDate(date: Date): string {
+  const day = date.getDate()
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ]
+  const month = months[date.getMonth()]
+  const year = date.getFullYear()
+  return `${day} ${month} ${year}`
+}
+
+// Helper: increment minor version
+function incrementVersion(verStr: string): string {
+  const parts = verStr.split('.')
+  if (parts.length === 2) {
+    const major = parseInt(parts[0], 10)
+    const minor = parseInt(parts[1], 10)
+    return `${major}.${minor + 1}`
+  }
+  return '1.0'
+}
 
 // GET: Fetch existing report for specific docType (`BRD`, `PRD`, `SRS`, or `KICKOFF`)
 export async function GET(req: NextRequest) {
@@ -16,6 +40,16 @@ export async function GET(req: NextRequest) {
 
     if (authError || !user) {
       return new Response('Unauthorized', { status: 401 })
+    }
+
+    let isAdmin = false
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profile?.is_admin) {
+      isAdmin = true
     }
 
     const { searchParams } = new URL(req.url)
@@ -52,12 +86,34 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    const extracted = report.extracted_json as any || {}
+    if (!extracted.docs_metadata) {
+      extracted.docs_metadata = {}
+    }
+    if (!extracted.docs_metadata[docType]) {
+      extracted.docs_metadata[docType] = {
+        version: '1.0',
+        status: 'Draft',
+        date: formatDate(new Date(report.updated_at || report.created_at || new Date())),
+        version_history: []
+      }
+    }
+    const docMeta = extracted.docs_metadata[docType]
+
+    if (isAdmin && docType === 'KICKOFF' && docMeta?.status !== 'Submitted' && !docMeta?.previously_submitted) {
+      return new Response(JSON.stringify({ exists: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
     return new Response(JSON.stringify({
       exists: true,
       report: {
         ...report,
         report_markdown: markdownForDoc,
         docType,
+        metadata: docMeta
       }
     }), {
       status: 200,
@@ -92,6 +148,7 @@ export async function POST(req: NextRequest) {
 
     const projectId = typeof body.projectId === 'string' ? body.projectId : ''
     const docTypeRaw = typeof body.docType === 'string' ? body.docType : 'KICKOFF'
+    const changeSummary = typeof body.changeSummary === 'string' ? body.changeSummary : ''
     const allowedDocTypes = ['KICKOFF', 'BRD', 'PRD', 'SRS', 'SOW']
     const docType = allowedDocTypes.includes(docTypeRaw) ? docTypeRaw : 'KICKOFF'
 
@@ -114,6 +171,35 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .single()
     const isAdmin = !!profile?.is_admin
+
+    // Validate Agency Profile branding for Requirement Summary (KICKOFF)
+    if (docType === 'KICKOFF') {
+      const orgId = project.org_id
+      let adminProfile = null
+      if (orgId) {
+        const { data: adminData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('org_id', orgId)
+          .eq('is_admin', true)
+          .limit(1)
+          .maybeSingle()
+        adminProfile = adminData
+      } else {
+        const { data: adminData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('is_admin', true)
+          .limit(1)
+          .maybeSingle()
+        adminProfile = adminData
+      }
+
+      const agency = parseAgencyDetails(adminProfile)
+      if (!agency || !agency.name || !agency.logo) {
+        return new Response('Agency profile is incomplete. Please upload an Agency Logo and set an Agency Name in the profile settings first.', { status: 400 })
+      }
+    }
 
     if (!isAdmin && project.user_id && project.user_id !== user.id) {
       return new Response('Forbidden — you do not have access to this project', { status: 403 })
@@ -202,6 +288,44 @@ export async function POST(req: NextRequest) {
           // Step 3: Save generated document into extracted_json.docs[docType]
           const currentDocs = (extractedPayload.docs as Record<string, string>) || {}
           const updatedDocs = { ...currentDocs, [docType]: fullMarkdown }
+          
+          // Versioning transition logic
+          if (!extractedPayload.docs_metadata) {
+            extractedPayload.docs_metadata = {}
+          }
+          const oldMeta = (extractedPayload.docs_metadata as any)[docType] || {
+            version: '1.0',
+            status: 'Draft',
+            date: formatDate(new Date()),
+            version_history: []
+          }
+
+          let newMeta
+          if (oldMeta.status === 'Approved') {
+            const nextVer = incrementVersion(oldMeta.version || '1.0')
+            const historyEntry = {
+              version: oldMeta.version || '1.0',
+              date: oldMeta.date || formatDate(new Date()),
+              changeSummary: changeSummary || 'Refinement based on chat',
+              status: 'Approved'
+            }
+            newMeta = {
+              version: nextVer,
+              status: 'Draft',
+              date: formatDate(new Date()),
+              version_history: [...(oldMeta.version_history || []), historyEntry]
+            }
+          } else {
+            newMeta = {
+              version: oldMeta.version || '1.0',
+              status: 'Draft',
+              date: formatDate(new Date()),
+              version_history: oldMeta.version_history || []
+            }
+          }
+
+          ;(extractedPayload.docs_metadata as any)[docType] = newMeta
+
           const updatedPayload = { ...extractedPayload, docs: updatedDocs, active_doc_type: docType }
 
           // If docType is KICKOFF, also update report_markdown column directly for backward compatibility
@@ -237,6 +361,91 @@ export async function POST(req: NextRequest) {
     })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Server error'
+    return new Response(msg, { status: 500 })
+  }
+}
+
+// PATCH: Approve report
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return new Response('Invalid JSON', { status: 400 })
+    }
+
+    const projectId = typeof body.projectId === 'string' ? body.projectId : ''
+    const docTypeRaw = typeof body.docType === 'string' ? body.docType : 'KICKOFF'
+    const allowedDocTypes = ['KICKOFF', 'BRD', 'PRD', 'SRS', 'SOW']
+    const docType = allowedDocTypes.includes(docTypeRaw) ? docTypeRaw : 'KICKOFF'
+
+    if (!projectId) return new Response('Missing projectId', { status: 400 })
+
+    const { data: existingReport } = await supabase
+      .from('kickoff_reports')
+      .select('*')
+      .eq('project_id', projectId)
+      .maybeSingle()
+
+    if (!existingReport) {
+      return new Response('Report not found', { status: 404 })
+    }
+
+    const extractedPayload = (existingReport.extracted_json as any) || {}
+    if (!extractedPayload.docs_metadata) {
+      extractedPayload.docs_metadata = {}
+    }
+
+    const oldMeta = extractedPayload.docs_metadata[docType] || {
+      version: '1.0',
+      status: 'Draft',
+      date: formatDate(new Date()),
+      version_history: []
+    }
+
+    const status = typeof body.status === 'string' ? body.status : 'Approved'
+    const newMeta = {
+      ...oldMeta,
+      status,
+      previously_submitted: status === 'Submitted' ? true : (oldMeta.previously_submitted || false)
+    }
+
+    extractedPayload.docs_metadata[docType] = newMeta
+
+    const { data: updatedReport, error: updateError } = await supabase
+      .from('kickoff_reports')
+      .update({
+        extracted_json: extractedPayload,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('project_id', projectId)
+      .select()
+      .single()
+
+    if (updateError) {
+      return new Response(updateError.message, { status: 500 })
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      report: {
+        ...updatedReport,
+        metadata: newMeta
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error approving report'
     return new Response(msg, { status: 500 })
   }
 }

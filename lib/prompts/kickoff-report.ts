@@ -3,108 +3,197 @@
  * Supports Kickoff Report (15-Section), BRD, PRD, and SRS generation in the user's dominant language.
  */
 
-export const KICKOFF_REPORT_PROMPT = `You are a Principal Software Architect and Director of Engineering at a premier digital agency.
-Using the structured requirement extraction payload provided below, generate an exhaustive, professional Project Kickoff Report.
+export const KICKOFF_REPORT_PROMPT = `You are a Senior Business Analyst specializing in Enterprise Discovery.
+Using the structured requirement extraction payload provided below, generate a Requirement Summary document.
 
 ### GENERATION RULES:
-1. Output one master markdown document containing EXACTLY the 15 mandatory sections below.
-2. If any section lacks explicit details from the client, provide industry-standard recommendations clearly marked as \`[AI Recommendation]\`.
-3. Generate narrative explanations in {detected_dominant_language}. Keep standard technical terms and table headers clear and precise.
+1. Output one master markdown document containing EXACTLY the 8 mandatory sections below.
+2. Generate narrative explanations in {detected_dominant_language}. Keep standard technical terms and table headers clear and precise.
+3. Do NOT wrap narrative, list-like, or single-item content in markdown tables. Use standard bold headings/paragraphs and bulleted lists instead. Only use tables for multi-row data structures (like matrices or logs).
 
-### MANDATORY 15 SECTIONS:
-# Project Kickoff Report: {project_title}
-## 1. Executive Summary
-## 2. Problem Statement
-## 3. Business Goals & KPI Metrics
-## 4. Target Users & Personas (Markdown Table)
-## 5. Functional Requirements Breakdown
-## 6. Non-Functional Requirements (Security, Performance, Compliance)
-## 7. Suggested Features & Scope Boundary (In-Scope vs Out-of-Scope)
-## 8. MoSCoW Prioritization Matrix (Markdown Table)
-## 9. Risks, Assumptions & Mitigation Strategies
-## 10. Suggested Tech Stack Architecture (Markdown Table with justifications)
-## 11. High-Level Delivery Roadmap (Phases 1, 2, 3)
-## 12. Timeline & Milestone Schedule [Agency to Complete]
-## 13. Technical Complexity & Qualitative Effort Analysis
-## 14. Open Questions & Underspecified Decisions
-## 15. Strategic AI Recommendations & Next Steps`
+### MANDATORY 8 SECTIONS:
+# Requirement Summary: {project_title}
+
+## 1. Project Overview
+Provide a concise overview of the project, scope, and primary vision.
+
+## 2. Business Goal
+Describe the primary business goals, objective, and desired business value.
+
+## 3. Key Features
+List the key functional features identified in the discovery conversation.
+
+## 4. Target Users
+Define the primary target user roles and their key needs.
+
+## 5. Integrations
+Identify any third-party systems, APIs, or integrations required.
+
+## 6. Open Questions
+List any remaining ambiguities, open questions, or decisions that still need clarification.
+
+## 7. AI Understanding
+State the completion percentage reflecting how much of the requirements are clearly understood vs. still ambiguous, formatted exactly as: "X% complete - [brief description of alignment]". E.g. "90% complete - Core workflows identified, minor API integrations need confirmation."
+
+## 8. Next Steps
+Fixed text: "Agency will review & prepare proposal"`
 
 export const BRD_PROMPT = `You are a Senior Business Analyst specializing in Enterprise Requirements.
 Using the structured extraction payload provided below, generate a comprehensive Business Requirements Document (BRD).
 
 ### GENERATION RULES:
 1. Output one master markdown document containing exactly the 8 BRD sections listed below.
-2. Focus on business value, financial return, stakeholder alignment, and operational KPIs. Use recommendations (` + '`[AI Recommendation]`' + `) where client specifics are missing.
+2. Focus ONLY on business aspects. Do NOT include technical implementation, APIs, database design, software architecture, project timelines, cost, or commercial/financial information.
 3. Generate narrative text in {detected_dominant_language}.
+4. Do NOT wrap narrative, list-like, or single-item content in markdown tables. Use standard bold headings/paragraphs and bulleted lists instead. Only use tables for multi-row data structures (like matrices or logs).
 
 ### MANDATORY 8 SECTIONS:
 # Business Requirements Document (BRD): {project_title}
-## 1. Executive Summary & Project Vision
-## 2. Current State vs. Future State & Business Problem Statement
-## 3. Strategic Business Objectives & Expected ROI
-## 4. Stakeholder Identification & User Role Definition (Markdown Table)
-## 5. High-Level Functional Scope & Core Business Processes
-## 6. Qualitative Value Analysis & Operational Risks [Agency to Complete Costing]
-## 7. Success KPIs & Measurable Acceptance Criteria (Markdown Table)
-## 8. Next Steps & Sign-Off Requirements [Agency to Complete Budget]`
+
+## 1. Business Problem
+Define the core business problem, operational pain points, or market opportunity.
+
+## 2. Current State
+Detail how the business processes operate currently and where constraints lie.
+
+## 3. Future State
+Illustrate the target state after implementing the solution.
+
+## 4. Business Goals
+Describe primary business goals, objectives, and desired business value.
+
+## 5. Stakeholders
+Identify key stakeholders, business sponsors, and user groups.
+
+## 6. Business Requirements
+Detail specific business requirements that must be met.
+
+## 7. Project Scope
+Clearly define boundaries under "In Scope" and "Out of Scope" items.
+
+## 8. Success Metrics / KPIs
+Define expected success metrics, operational outcomes, and KPIs.`
 
 export const PRD_PROMPT = `You are an expert Principal Product Manager and UX Architect.
 Using the structured extraction payload provided below, generate a highly detailed Product Requirements Document (PRD).
 
 ### GENERATION RULES:
-1. Output one master markdown document containing exactly the 8 PRD sections listed below.
-2. Focus on user personas, detailed user stories, MoSCoW priorities, UX flows, and edge cases. Use recommendations (` + '`[AI Recommendation]`' + `) where needed.
+1. Output one master markdown document containing exactly the 9 PRD sections listed below.
+2. Focus on user experience, product behavior, prioritization, and product roadmap. Do NOT include database design, APIs, deployment, implementation details, or commercial/financial information.
 3. Generate narrative text in {detected_dominant_language}.
+4. Do NOT wrap narrative, list-like, or single-item content in markdown tables. Use standard bold headings/paragraphs and bulleted lists instead. Only use tables for multi-row data structures (like matrices or logs).
 
-### MANDATORY 8 SECTIONS:
+### MANDATORY 9 SECTIONS:
 # Product Requirements Document (PRD): {project_title}
-## 1. Product Overview & Value Proposition
-## 2. Target Personas & User Empathy Mapping (Thinks / Feels / Does / Says Grid)
-## 3. Comprehensive User Stories & Acceptance Criteria (Format: As a [user], I want [feature] so that [benefit])
-## 4. MoSCoW Prioritization Matrix (Markdown Table of Must, Should, Could, Won't Have)
-## 5. Core User Flows & User Journey Maps (Persona → Touchpoints → Actions → Emotions → Pain Points)
-## 6. Edge Cases, Error Handling & Offline Behaviors
-## 7. Release Quality Gates & MVP Acceptance Criteria
-## 8. Future Roadmap & Post-MVP Evolution`
+
+## 1. Product Vision
+Detail the product vision, market positioning, and core value proposition.
+
+## 2. Product Objectives
+List target objectives, expected outcomes, and product success metrics.
+
+## 3. User Personas
+Define distinct target personas, their behaviors, key pain points, and goals.
+
+## 4. User Journey
+Describe the touchpoints, actions, and emotion mapping of the persona's product journey.
+
+## 5. Features & Functional Overview
+Provide a high-level overview of functional modules and core features.
+
+## 6. User Stories
+Detail comprehensive user stories (Format: As a [user], I want [feature] so that [benefit]).
+
+## 7. Acceptance Criteria
+List standard functional requirements and acceptance criteria.
+
+## 8. MoSCoW Prioritization
+Create a MoSCoW matrix (Must Have, Should Have, Could Have, Won't Have) for key features.
+
+## 9. Product Roadmap (High Level)
+Illustrate a high-level product evolution timeline and post-MVP scope.`
 
 export const SRS_PROMPT = `You are a Principal Lead Systems Architect and Database Engineer.
 Using the structured extraction payload provided below, generate an exhaustive Software Requirements Specification (SRS) adhering to IEEE 830 principles.
 
 ### GENERATION RULES:
-1. Output one master markdown document containing exactly the 8 technical SRS sections listed below.
-2. Focus on exact functional identifiers [FR-001], non-functional metrics [NFR-001], database schemas, API contracts, and deployment architecture. Use (` + '`[AI Recommendation]`' + `) where needed.
+1. Output one master markdown document containing exactly the 11 technical SRS sections listed below.
+2. This should be purely technical. Focus on database schemas, API specs, security standards, and deployment targets. Do NOT include pricing, project management details, milestones, payment terms, or commercial sections.
 3. Generate narrative text in {detected_dominant_language} while keeping technical identifiers, SQL/JSON schemas, and protocol terms precise.
+4. Do NOT wrap narrative, list-like, or single-item content in markdown tables. Use standard bold headings/paragraphs and bulleted lists instead. Only use tables for multi-row data structures (like matrices or logs).
 
-### MANDATORY 8 SECTIONS:
+### MANDATORY 11 SECTIONS:
 # Software Requirements Specification (SRS): {project_title}
-## 1. Introduction, Purpose & System Scope
-## 2. Overall System Description & High-Level Architecture Diagram (Mermaid or Textual Flow)
-## 3. Detailed Functional Requirements Specification [FR-001 to FR-n] (Markdown Table with IDs, Description, Inputs, Outputs)
-## 4. Detailed Non-Functional Requirements [NFR-001 to NFR-n] (Performance <200ms, Security, Availability 99.9%)
-## 5. Data Architecture & Database Entity-Relationship Summary (Tables, Primary Keys, Foreign Keys)
-## 6. API Endpoints & Third-Party Integration Contracts (REST/GraphQL endpoints, webhooks)
-## 7. Security, Authentication, Authorization & Data Encryption Standards
-## 8. Deployment Architecture, Cloud Infrastructure & DevOps Pipeline Constraints`
+
+## 1. System Overview
+Provide a technical overview of the software system and its primary components.
+
+## 2. System Architecture
+Describe system architecture, layers, components, and data flows (Mermaid diagrams or text flows).
+
+## 3. Functional Requirements
+List technical functional requirements using identifiers [FR-001, FR-002, etc.].
+
+## 4. Non-Functional Requirements
+Define technical non-functional requirements [NFR-001, NFR-002, etc.] (e.g. latency, availability, load capacity).
+
+## 5. Database Design
+Specify data schemas, primary keys, foreign keys, table relationships, or column configurations.
+
+## 6. API Specifications
+Detail REST/GraphQL/gRPC endpoints, webhook structures, payloads, and response structures.
+
+## 7. Security Requirements
+Specify authentication/authorization protocols, data encryption at rest and in transit, and security policies.
+
+## 8. Validation Rules
+Describe input validation rules, pattern checks, and constraints.
+
+## 9. Error Handling
+Detail system behaviors on errors, error codes, logs, and user notifications.
+
+## 10. Technical Constraints
+Specify language, framework, database, infrastructure, or hardware constraints.
+
+## 11. Deployment Considerations
+Describe cloud infrastructure requirements, containerization, hosting environments, and DevOps pipeline constraints.`
 
 export const SOW_PROMPT = `You are a Principal Delivery Manager.
-Using the structured extraction payload provided below, generate a comprehensive Scope of Work (SOW) document.
+Using the structured extraction payload provided below, generate a Proposed Scope of Work (SOW).
 
 ### GENERATION RULES:
 1. Output one master markdown document containing exactly the 8 SOW sections listed below.
-2. Focus strictly on defining the boundaries of the engagement, deliverables, and acceptance criteria.
-3. Generate narrative text in {detected_dominant_language}.
-4. Do NOT include any monetary cost estimates, hourly rates, or fixed timeline dates. These are business decisions handled by the agency. Label budget/timeline sections as "[Agency to Complete]".
+2. This document should define WHAT will be delivered, not HOW it will be implemented.
+3. Remove any sections or references related to: Agency Budget, Commercial Terms, Pricing, Payment Schedule, Cost Estimates, Proposal Amount, or Financial Assumptions. Commercial decisions are handled separately.
+4. Generate narrative text in {detected_dominant_language}.
+5. Do NOT wrap narrative, list-like, or single-item content in markdown tables. Use standard bold headings/paragraphs and bulleted lists instead. Only use tables for multi-row data structures (like matrices or logs).
 
 ### MANDATORY 8 SECTIONS:
-# Scope of Work (SOW): {project_title}
+# Proposed Scope of Work: {project_title}
+
 ## 1. Project Objectives & Business Justification
+Describe the high-level project goals and alignment.
+
 ## 2. In-Scope Deliverables & Features
+Specify the modules, functional blocks, and deliverables that are included.
+
 ## 3. Out-of-Scope Items & Exclusions
+List items, services, or integration boundaries excluded from this SOW.
+
 ## 4. Key Assumptions & Constraints
+State delivery assumptions, dependencies, and execution constraints.
+
 ## 5. Agency & Client Responsibilities
+Define the roles, tasks, resource provisions, and reviews for both parties.
+
 ## 6. Acceptance Criteria & Quality Gates
-## 7. Timeline & Milestone Schedule [Agency to Complete]
-## 8. Project Governance & Sign-Off [Agency to Complete Budget]`
+Define user acceptance testing guidelines and criteria for final sign-off.
+
+## 7. Proposed Timeline & Milestones
+Outline a high-level timeline of release cycles, phases, and milestones without pricing or budgets.
+
+## 8. Project Governance & Sign-Off
+Define the project status reporting rhythm, change request protocols, and sign-off processes (strictly non-commercial).`
 
 export function getPromptForDocType(docType: string, dominantLang: string, projectTitle: string): string {
   let template = KICKOFF_REPORT_PROMPT

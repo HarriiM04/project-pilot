@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Resend } from 'resend'
 import { marked } from 'marked'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { parseAgencyDetails } from '@/lib/utils'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -35,6 +36,19 @@ export async function POST(req: NextRequest) {
       .eq('id', user.id)
       .single()
     const isAdmin = !!profile?.is_admin
+
+    if (isAdmin) {
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      
+      const agency = parseAgencyDetails(adminProfile)
+      if (!agency || !agency.name || !agency.logo) {
+        return new Response('Agency profile is incomplete. Please set your Agency Name and Logo in Admin settings first.', { status: 400 })
+      }
+    }
 
     // Verify ownership or admin
     const { data: project } = await supabase

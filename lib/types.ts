@@ -21,6 +21,7 @@ export interface DiscoveryState {
   overallCompletion: number
   sections: DiscoverySection[]
   suggestedOptions?: string[]
+  requirementsChanged?: boolean
 }
 
 // ── 3-Day MVP Core Types ──────────────────────────────────────────────────
@@ -47,6 +48,7 @@ export interface DiscoveryTurnResponse {
   assistant_reply: string
   dominant_language?: string
   industry_domain?: string
+  requirements_changed?: boolean
 }
 
 export interface KickoffReport {

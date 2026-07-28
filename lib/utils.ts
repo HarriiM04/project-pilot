@@ -18,3 +18,39 @@ export function getInitials(name?: string, email?: string): string {
   }
   return 'ME'
 }
+
+export interface AgencyDetails {
+  logo: string
+  name: string
+  email?: string
+}
+
+export function parseAgencyDetails(profile?: { full_name?: string | null; avatar_url?: string | null } | null): AgencyDetails | null {
+  if (!profile) return null
+  const logo = profile.avatar_url || ''
+  if (!logo) return null
+
+  try {
+    if (profile.full_name && (profile.full_name.startsWith('{') || profile.full_name.startsWith('['))) {
+      const parsed = JSON.parse(profile.full_name)
+      if (parsed && parsed.agencyName) {
+        return {
+          logo,
+          name: parsed.agencyName,
+          email: parsed.agencyEmail || undefined,
+        }
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  if (profile.full_name) {
+    return {
+      logo,
+      name: profile.full_name,
+    }
+  }
+
+  return null
+}
