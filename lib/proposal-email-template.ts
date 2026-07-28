@@ -4,7 +4,7 @@ export interface EmailTemplateVariables {
   CLIENT_NAME: string
   PROJECT_NAME: string
   PROPOSAL_LINK: string
-  CALENDLY_LINK: string
+  WHATSAPP_LINK: string
   AGENCY_NAME: string
   AGENCY_EMAIL: string
   PRIMARY_COLOR: string
@@ -14,139 +14,178 @@ export interface EmailTemplateVariables {
 }
 
 /**
- * Generate a branded HTML email template for proposal delivery
- * All styling is inline (for Gmail/Outlook/Apple Mail compatibility)
- * Variables are left as {{PLACEHOLDER}} tokens for templating at send time
+ * Generate a branded HTML email template for proposal delivery.
+ * Uses table-based layout for maximum email client compatibility
+ * (Gmail, Outlook, Apple Mail, etc.)
+ *
+ * CTAs:
+ *  - "View Full Proposal (PDF)" → PROPOSAL_LINK
+ *  - "Book Kickoff Call" → WHATSAPP_LINK (wa.me with prefilled message)
  */
 export function generateProposalEmailHTML(variables: EmailTemplateVariables): string {
+  const primary = variables.PRIMARY_COLOR || '#4F46E5'
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Project Proposal</title>
-  <style>
-    @media only screen and (max-width: 600px) {
-      .email-container {
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .email-content {
-        padding: 16px !important;
-      }
-      .stat-card-row {
-        display: block !important;
-      }
-      .stat-card {
-        width: 100% !important;
-        margin-bottom: 16px !important;
-        margin-right: 0 !important;
-      }
-      .footer-content {
-        display: block !important;
-        text-align: center !important;
-      }
-      .footer-links {
-        margin-bottom: 16px !important;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Proposal</title>
+<style>
+  @media only screen and (max-width: 600px) {
+    .container { width: 100% !important; }
+    .stack { display: block !important; width: 100% !important; padding: 0 0 12px 0 !important; }
+    .px { padding-left: 20px !important; padding-right: 20px !important; }
+    .h1 { font-size: 22px !important; }
+    .cta-cell { display: block !important; width: 100% !important; padding: 0 0 10px 0 !important; }
+  }
+</style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
-  <!-- WRAPPER -->
-  <div class="email-container" style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-    <!-- HEADER -->
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: ${variables.PRIMARY_COLOR}; padding: 24px; box-sizing: border-box;">
-      <tr>
-        <td align="center">
-          <!-- Logo placeholder -->
-          <div style="margin-bottom: 12px;">
-            <strong style="font-size: 18px; color: #ffffff; letter-spacing: 1px;">ProjectPilot</strong>
-          </div>
-          <p style="margin: 0; font-size: 13px; color: rgba(255, 255, 255, 0.9); letter-spacing: 0.5px;">From idea to kickoff, instantly</p>
-        </td>
-      </tr>
-    </table>
+<body style="margin:0; padding:0; background-color:#F4F5F7; font-family:Helvetica, Arial, sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F4F5F7; padding:32px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#FFFFFF; border-radius:12px; overflow:hidden; border:1px solid #E5E7EB;">
 
-    <!-- CONTENT -->
-    <div class="email-content" style="padding: 32px 24px;">
-      <!-- GREETING -->
-      <p style="margin: 0 0 24px 0; font-size: 16px; color: #1a2340; font-weight: 600;">
-        Hi {{CLIENT_NAME}},
-      </p>
+        <!-- Header -->
+        <tr>
+          <td class="px" style="background-color:${primary}; padding:28px 40px;" align="left">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td valign="middle" width="36">
+                  <div style="width:36px; height:36px; background-color:#FFFFFF; border-radius:8px; text-align:center; line-height:36px; font-weight:bold; color:${primary}; font-family:Helvetica, Arial, sans-serif;">PP</div>
+                </td>
+                <td valign="middle" style="padding-left:12px;">
+                  <span style="font-size:18px; font-weight:bold; color:#FFFFFF; font-family:Helvetica, Arial, sans-serif;">ProjectPilot</span><br>
+                  <span style="font-size:12px; color:#E9E9FF; font-family:Helvetica, Arial, sans-serif;">From idea to kickoff, instantly</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-      <!-- INTRO PARAGRAPH -->
-      <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
-        Thank you for our great conversation about <strong>{{PROJECT_NAME}}</strong>. 
-        Based on our discovery session, we've put together a comprehensive proposal that outlines the scope, 
-        timeline, and investment for your project. Please see the attached PDF for full details.
-      </p>
+        <!-- Body -->
+        <tr>
+          <td class="px" style="padding:36px 40px 8px 40px;">
+            <p class="h1" style="margin:0 0 16px 0; font-size:20px; font-weight:bold; color:#111827; font-family:Helvetica, Arial, sans-serif;">
+              Hi {{CLIENT_NAME}},
+            </p>
+            <p style="margin:0 0 20px 0; font-size:15px; line-height:22px; color:#4B5563; font-family:Helvetica, Arial, sans-serif;">
+              Based on our recent discovery conversation, we&rsquo;ve put together the full project proposal for
+              <strong style="color:#111827;">{{PROJECT_NAME}}</strong>. It covers scope, timeline, cost estimate,
+              and key deliverables &mdash; attached as a PDF below.
+            </p>
+          </td>
+        </tr>
 
-      <!-- STAT CARDS -->
-      <div class="stat-card-row" style="display: flex; gap: 16px; margin: 32px 0;">
-        <!-- Card 1: Timeline -->
-        <div class="stat-card" style="width: 32%; background-color: #f1f5f9; padding: 20px; border-radius: 8px; text-align: center; box-sizing: border-box;">
-          <div style="font-size: 24px; margin-bottom: 8px;">⏱️</div>
-          <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Timeline</p>
-          <p style="margin: 0; font-size: 16px; color: #1a2340; font-weight: bold;">{{ESTIMATED_TIMELINE}}</p>
-        </div>
+        <!-- Stat cards -->
+        <tr>
+          <td class="px" style="padding:0 40px 8px 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td class="stack" width="33.33%" style="padding-right:8px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px;">
+                    <tr>
+                      <td align="center" style="padding:18px 8px;">
+                        <div style="font-size:20px; margin-bottom:6px;">&#9201;&#65039;</div>
+                        <div style="font-size:11px; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; font-family:Helvetica, Arial, sans-serif;">Timeline</div>
+                        <div style="font-size:15px; font-weight:bold; color:#111827; margin-top:2px; font-family:Helvetica, Arial, sans-serif;">{{ESTIMATED_TIMELINE}}</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td class="stack" width="33.33%" style="padding-left:4px; padding-right:4px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px;">
+                    <tr>
+                      <td align="center" style="padding:18px 8px;">
+                        <div style="font-size:20px; margin-bottom:6px;">&#128176;</div>
+                        <div style="font-size:11px; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; font-family:Helvetica, Arial, sans-serif;">Budget Range</div>
+                        <div style="font-size:15px; font-weight:bold; color:#111827; margin-top:2px; font-family:Helvetica, Arial, sans-serif;">{{ESTIMATED_COST}}</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td class="stack" width="33.33%" style="padding-left:8px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F9FAFB; border:1px solid #E5E7EB; border-radius:10px;">
+                    <tr>
+                      <td align="center" style="padding:18px 8px;">
+                        <div style="font-size:20px; margin-bottom:6px;">&#128230;</div>
+                        <div style="font-size:11px; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px; font-family:Helvetica, Arial, sans-serif;">Deliverables</div>
+                        <div style="font-size:15px; font-weight:bold; color:#111827; margin-top:2px; font-family:Helvetica, Arial, sans-serif;">{{KEY_DELIVERABLES}}</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-        <!-- Card 2: Budget -->
-        <div class="stat-card" style="width: 32%; background-color: #f1f5f9; padding: 20px; border-radius: 8px; text-align: center; box-sizing: border-box;">
-          <div style="font-size: 24px; margin-bottom: 8px;">💰</div>
-          <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Budget</p>
-          <p style="margin: 0; font-size: 16px; color: #1a2340; font-weight: bold;">{{ESTIMATED_COST}}</p>
-        </div>
+        <!-- Two CTA buttons side by side -->
+        <tr>
+          <td align="center" style="padding:28px 40px 8px 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <!-- CTA 1: View Proposal PDF -->
+                <td class="cta-cell" align="center" style="padding-right:8px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" style="border-radius:8px; background-color:${primary};">
+                        <a href="{{PROPOSAL_LINK}}" style="display:inline-block; padding:13px 24px; font-size:14px; font-weight:bold; color:#FFFFFF; text-decoration:none; font-family:Helvetica, Arial, sans-serif; white-space:nowrap;">
+                          &#128196; View Full Proposal (PDF)
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <!-- CTA 2: Book Kickoff Call via WhatsApp -->
+                <td class="cta-cell" align="center" style="padding-left:8px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" style="border-radius:8px; background-color:#25D366;">
+                        <a href="{{WHATSAPP_LINK}}" style="display:inline-block; padding:13px 24px; font-size:14px; font-weight:bold; color:#FFFFFF; text-decoration:none; font-family:Helvetica, Arial, sans-serif; white-space:nowrap;">
+                          &#128222; Book Kickoff Call
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
 
-        <!-- Card 3: Deliverables -->
-        <div class="stat-card" style="width: 32%; background-color: #f1f5f9; padding: 20px; border-radius: 8px; text-align: center; box-sizing: border-box;">
-          <div style="font-size: 24px; margin-bottom: 8px;">📦</div>
-          <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Deliverables</p>
-          <p style="margin: 0; font-size: 16px; color: #1a2340; font-weight: bold;">{{KEY_DELIVERABLES}}</p>
-        </div>
-      </div>
+        <!-- Secondary line -->
+        <tr>
+          <td class="px" align="center" style="padding:12px 40px 32px 40px;">
+            <p style="margin:0; font-size:13px; color:#6B7280; font-family:Helvetica, Arial, sans-serif;">
+              We&rsquo;ll follow up within 2 business days to schedule a kickoff call. Or just reply to this email, or
+              <a href="{{WHATSAPP_LINK}}" style="color:${primary}; text-decoration:underline;">message us on WhatsApp</a>.
+            </p>
+          </td>
+        </tr>
 
-      <!-- CTA BUTTON -->
-      <div style="margin: 32px 0; text-align: center;">
-        <a href="{{PROPOSAL_LINK}}" style="display: inline-block; padding: 14px 32px; background-color: ${variables.PRIMARY_COLOR}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; transition: opacity 0.2s;">
-          View Full Proposal
-        </a>
-      </div>
+        <!-- Divider -->
+        <tr>
+          <td style="padding:0 40px;">
+            <div style="border-top:1px solid #E5E7EB;"></div>
+          </td>
+        </tr>
 
-      <!-- SECONDARY CTA -->
-      <p style="margin: 24px 0; font-size: 13px; line-height: 1.6; color: #64748b; text-align: center;">
-        Have questions? <a href="{{CALENDLY_LINK}}" style="color: ${variables.PRIMARY_COLOR}; text-decoration: none; font-weight: 600;">Book a quick call</a> or <a href="mailto:{{AGENCY_EMAIL}}" style="color: ${variables.PRIMARY_COLOR}; text-decoration: none; font-weight: 600;">reply to this email</a>.
-      </p>
-    </div>
+        <!-- Footer -->
+        <tr>
+          <td class="px" align="center" style="padding:24px 40px 32px 40px;">
+            <p style="margin:0 0 6px 0; font-size:13px; font-weight:bold; color:#111827; font-family:Helvetica, Arial, sans-serif;">{{AGENCY_NAME}}</p>
+            <p style="margin:0 0 12px 0; font-size:12px; color:#6B7280; font-family:Helvetica, Arial, sans-serif;">{{AGENCY_EMAIL}}</p>
+            <p style="margin:16px 0 0 0; font-size:11px; color:#9CA3AF; font-family:Helvetica, Arial, sans-serif;">
+              &#9889; Powered by ProjectPilot
+            </p>
+          </td>
+        </tr>
 
-    <!-- FOOTER -->
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px;">
-      <tr>
-        <td>
-          <div class="footer-content" style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="footer-links" style="flex: 1;">
-              <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 600;">
-                {{AGENCY_NAME}}
-              </p>
-              <p style="margin: 4px 0 0 0; font-size: 11px; color: #94a3b8;">
-                {{AGENCY_EMAIL}}
-              </p>
-              <div style="margin-top: 12px; display: flex; gap: 12px; justify-content: flex-start;">
-                <!-- Social icons (placeholder) -->
-                <a href="#" style="color: #94a3b8; text-decoration: none; font-size: 12px;">LinkedIn</a>
-                <a href="#" style="color: #94a3b8; text-decoration: none; font-size: 12px;">Twitter</a>
-              </div>
-            </div>
-            <div style="text-align: right; flex: 1;">
-              <p style="margin: 0; font-size: 10px; color: #cbd5e1; text-align: right;">
-                Powered by <strong>ProjectPilot</strong>
-              </p>
-            </div>
-          </div>
-        </td>
-      </tr>
-    </table>
-  </div>
+      </table>
+    </td>
+  </tr>
+</table>
 </body>
 </html>`
 }
@@ -156,11 +195,11 @@ export function generateProposalEmailHTML(variables: EmailTemplateVariables): st
  */
 export function renderEmailTemplate(template: string, variables: EmailTemplateVariables): string {
   let html = template
-  
+
   for (const [key, value] of Object.entries(variables)) {
     const placeholder = new RegExp(`{{${key}}}`, 'g')
     html = html.replace(placeholder, value)
   }
-  
+
   return html
 }

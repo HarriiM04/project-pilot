@@ -169,6 +169,7 @@ export function validateEmailTemplate(html: string): { valid: boolean; missing: 
     'ESTIMATED_TIMELINE',
     'ESTIMATED_COST',
     'PROPOSAL_LINK',
+    'WHATSAPP_LINK',
   ]
   
   const missing: string[] = []

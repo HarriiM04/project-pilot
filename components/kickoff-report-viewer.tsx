@@ -655,11 +655,20 @@ export function KickoffReportViewer() {
 
   const handleGenerateProposal = async () => {
     try {
-      // Check that BRD, PRD, SOW exist
-      const docRes = await fetch(`/api/report?projectId=${projectId}&docType=BRD`)
-      const docData = await docRes.json()
-      if (!docData.exists || !docData.report?.report_markdown) {
-        showToast('BRD, PRD, and SOW are required to generate a proposal', 'error')
+      // Check all three required docs exist before attempting generation
+      // The generate route requires BRD, PRD, and SOW from extracted_json.docs
+      const missing: string[] = []
+      for (const doc of ['BRD', 'PRD', 'SOW'] as const) {
+        const res = await fetch(`/api/report?projectId=${projectId}&docType=${doc}`)
+        const data = await res.json()
+        if (!data.exists) missing.push(doc)
+      }
+
+      if (missing.length > 0) {
+        showToast(
+          `Please generate ${missing.join(', ')} first before creating a proposal draft`,
+          'error'
+        )
         return
       }
 
@@ -670,6 +679,7 @@ export function KickoffReportViewer() {
       showToast(msg, 'error')
     }
   }
+
 
   const handleUpdateProposal = (markdown: string) => {
     updateProposalDraft(markdown)

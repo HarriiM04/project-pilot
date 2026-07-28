@@ -67,6 +67,7 @@ interface DiscoveryContextValue {
 
 export interface SendProposalData {
   clientEmail: string
+  clientName: string
   finalCost: string
   estimatedTimeline: string
   expiryDate?: string

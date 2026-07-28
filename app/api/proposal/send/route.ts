@@ -116,9 +116,11 @@ export async function POST(req: NextRequest) {
       return new Response('Project not found', { status: 403 })
     }
 
-    const { data: profile } = await supabase
+    // Fetch full profile so parseAgencyDetails can extract agency name/email from full_name JSON
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile } = await (supabase as any)
       .from('profiles')
-      .select('is_admin, full_name')
+      .select('is_admin, full_name, avatar_url')
       .eq('id', user.id)
       .single()
     const isAdmin = !!profile?.is_admin
@@ -154,14 +156,8 @@ export async function POST(req: NextRequest) {
       .replace(/\[PLACEHOLDER:\s*Estimated Timeline[^\]]*\]/gi, validatedTimeline)
       .replace(/\[PLACEHOLDER:\s*Project Cost[^\]]*\]/gi, validatedCost)
 
-    // ── BUG FIX #3: Sanitize "Next Steps" to remove internal notes ──
-    finalProposalMarkdown = finalProposalMarkdown.replace(
-      /(## 10\.\s*Next Steps\n+)([^#]+)/i,
-      (match, heading, content) => {
-        const sanitizedContent = sanitizeNextStepsSection(content)
-        return `${heading}${sanitizedContent}\n\n`
-      }
-    )
+    // Sanitize any internal-notes content across all sections
+    finalProposalMarkdown = sanitizeNextStepsSection(finalProposalMarkdown)
 
     // Add expiry date to Next Steps if provided
     if (expiryDate) {
@@ -239,21 +235,27 @@ export async function POST(req: NextRequest) {
 
     console.log('[PROPOSAL] PDF generated:', pdfBuffer.length, 'bytes')
 
-    // ── BUG FIX #4: Use branded HTML template (not raw text) ──
+    // ── BUG FIX #4: Use branded HTML template ──
     const agencyDetails = parseAgencyDetails(profile)
+    const agencyName = agencyDetails?.name || 'ProjectPilot'
+    const agencyEmail = agencyDetails?.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
     const proposalLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/workspace/${projectId}`
+
+    // Build WhatsApp CTA link with URL-encoded prefilled message using brand name
+    const waMessage = `Hey, I'm from ${agencyName}, let's schedule the kickoff call.`
+    const whatsappLink = `https://wa.me/9265037415?text=${encodeURIComponent(waMessage)}`
 
     const emailVariables: EmailTemplateVariables = {
       CLIENT_NAME: clientName,
       PROJECT_NAME: project.title || 'Your Project',
       PROPOSAL_LINK: proposalLink,
-      CALENDLY_LINK: agencyDetails.calendlyUrl || 'https://calendly.com',
-      AGENCY_NAME: agencyDetails.organizationName || 'ProjectPilot',
-      AGENCY_EMAIL: agencyDetails.organizationEmail || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com',
-      PRIMARY_COLOR: '#2d6ef5',
+      WHATSAPP_LINK: whatsappLink,
+      AGENCY_NAME: agencyName,
+      AGENCY_EMAIL: agencyEmail,
+      PRIMARY_COLOR: '#4F46E5',
       ESTIMATED_COST: validatedCost,
       ESTIMATED_TIMELINE: validatedTimeline,
-      KEY_DELIVERABLES: '10 sections',
+      KEY_DELIVERABLES: 'Full 12-section proposal attached',
     }
 
     // Generate HTML email
@@ -271,10 +273,13 @@ export async function POST(req: NextRequest) {
     console.log('[PROPOSAL] Email template validated successfully')
 
     // ── Send email with branded HTML + PDF attachment ──
+    // Always send FROM the verified domain. Agency email goes to Reply-To.
     const senderEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+    const replyToEmail = emailVariables.AGENCY_EMAIL || senderEmail
 
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: `${emailVariables.AGENCY_NAME} <${senderEmail}>`,
+      replyTo: replyToEmail,
       to: [clientEmail],
       subject: `Your Project Proposal: ${project.title}`,
       html: emailHTML,

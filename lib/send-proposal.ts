@@ -12,7 +12,7 @@ import {
 export interface AgencyConfig {
   name: string
   email: string
-  calendlyLink: string
+  whatsappNumber?: string
   primaryColor: string
   logo?: string
 }
@@ -76,11 +76,13 @@ export async function sendProposal(input: SendProposalInput): Promise<SendPropos
     console.log(`[PROPOSAL] PDF generated: ${pdfBuffer.length} bytes`)
 
     // Step 2: Generate email template
+    const waMsg = `Hey, I'm from ${input.agencyConfig.name}, let's schedule the kickoff call.`
+    const whatsappLink = `https://wa.me/${input.agencyConfig.whatsappNumber || '9265037415'}?text=${encodeURIComponent(waMsg)}`
     const emailTemplate = generateProposalEmailHTML({
       CLIENT_NAME: input.clientName,
       PROJECT_NAME: input.projectData.project_name,
       PROPOSAL_LINK: input.proposalLink,
-      CALENDLY_LINK: input.agencyConfig.calendlyLink,
+      WHATSAPP_LINK: whatsappLink,
       AGENCY_NAME: input.agencyConfig.name,
       AGENCY_EMAIL: input.agencyConfig.email,
       PRIMARY_COLOR: input.agencyConfig.primaryColor,
@@ -93,7 +95,7 @@ export async function sendProposal(input: SendProposalInput): Promise<SendPropos
       CLIENT_NAME: input.clientName,
       PROJECT_NAME: input.projectData.project_name,
       PROPOSAL_LINK: input.proposalLink,
-      CALENDLY_LINK: input.agencyConfig.calendlyLink,
+      WHATSAPP_LINK: whatsappLink,
       AGENCY_NAME: input.agencyConfig.name,
       AGENCY_EMAIL: input.agencyConfig.email,
       PRIMARY_COLOR: input.agencyConfig.primaryColor,
@@ -166,29 +168,20 @@ export async function renderProposalEmailOnly(
   agencyConfig: AgencyConfig,
   proposalLink: string
 ): Promise<string> {
-  const template = generateProposalEmailHTML({
-    CLIENT_NAME: clientName,
-    PROJECT_NAME: projectData.project_name,
-    PROPOSAL_LINK: proposalLink,
-    CALENDLY_LINK: agencyConfig.calendlyLink,
-    AGENCY_NAME: agencyConfig.name,
-    AGENCY_EMAIL: agencyConfig.email,
-    PRIMARY_COLOR: agencyConfig.primaryColor,
-    ESTIMATED_COST: projectData.estimated_cost,
-    ESTIMATED_TIMELINE: projectData.estimated_timeline,
-    KEY_DELIVERABLES: `${projectData.sections.length} phases`,
-  })
-
-  return renderEmailTemplate(template, {
-    CLIENT_NAME: clientName,
-    PROJECT_NAME: projectData.project_name,
-    PROPOSAL_LINK: proposalLink,
-    CALENDLY_LINK: agencyConfig.calendlyLink,
-    AGENCY_NAME: agencyConfig.name,
-    AGENCY_EMAIL: agencyConfig.email,
-    PRIMARY_COLOR: agencyConfig.primaryColor,
-    ESTIMATED_COST: projectData.estimated_cost,
-    ESTIMATED_TIMELINE: projectData.estimated_timeline,
-    KEY_DELIVERABLES: `${projectData.sections.length} phases`,
-  })
+    const waMsg2 = `Hey, I'm from ${agencyConfig.name}, let's schedule the kickoff call.`
+    const waLink = `https://wa.me/${(agencyConfig as any).whatsappNumber || '9265037415'}?text=${encodeURIComponent(waMsg2)}`
+    const vars = {
+      CLIENT_NAME: clientName,
+      PROJECT_NAME: projectData.project_name,
+      PROPOSAL_LINK: proposalLink,
+      WHATSAPP_LINK: waLink,
+      AGENCY_NAME: agencyConfig.name,
+      AGENCY_EMAIL: agencyConfig.email,
+      PRIMARY_COLOR: agencyConfig.primaryColor,
+      ESTIMATED_COST: projectData.estimated_cost,
+      ESTIMATED_TIMELINE: projectData.estimated_timeline,
+      KEY_DELIVERABLES: `${projectData.sections.length} phases`,
+    }
+    const template = generateProposalEmailHTML(vars)
+    return renderEmailTemplate(template, vars)
 }

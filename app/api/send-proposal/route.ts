@@ -9,7 +9,7 @@ import {
   sanitizeNextStepsSection,
   validateEmailTemplate
 } from '@/lib/proposal-parser'
-import { generateProposalEmailHTML } from '@/lib/proposal-email-template'
+import { generateProposalEmailHTML, renderEmailTemplate } from '@/lib/proposal-email-template'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -36,32 +36,36 @@ export async function POST(req: NextRequest) {
       return new Response('Missing required fields', { status: 400 })
     }
 
-    // Bug Fix #1: Validate and format cost
+    // Validate and format cost
     let formattedCost = 'TBD'
     if (costEstimate) {
-      const costResult = validateAndFormatCost(costEstimate)
-      if (!costResult.valid) {
-        return new Response(`Invalid cost: ${costResult.error}`, { status: 400 })
+      try {
+        formattedCost = validateAndFormatCost(costEstimate)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Invalid cost'
+        return new Response(msg, { status: 400 })
       }
-      formattedCost = costResult.formatted || 'TBD'
     }
 
-    // Bug Fix #2: Validate and format timeline
+    // Validate and format timeline
     let formattedTimeline = 'TBD'
     if (timelineEstimate) {
-      const timelineResult = validateAndFormatTimeline(timelineEstimate)
-      if (!timelineResult.valid) {
-        return new Response(`Invalid timeline: ${timelineResult.error}`, { status: 400 })
+      try {
+        formattedTimeline = validateAndFormatTimeline(timelineEstimate)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Invalid timeline'
+        return new Response(msg, { status: 400 })
       }
-      formattedTimeline = timelineResult.formatted || 'TBD'
     }
 
     // Bug Fix #3: Sanitize internal notes from report markdown
     const sanitizedMarkdown = sanitizeNextStepsSection(reportMarkdown)
 
-    const { data: profile } = await supabase
+    // Fetch profile with correct column names that parseAgencyDetails expects
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile } = await (supabase as any)
       .from('profiles')
-      .select('is_admin, agency_name, agency_logo')
+      .select('is_admin, full_name, avatar_url')
       .eq('id', user.id)
       .single()
     const isAdmin = !!profile?.is_admin
@@ -97,32 +101,54 @@ export async function POST(req: NextRequest) {
       return new Response('Project not found or unauthorized', { status: 403 })
     }
 
-    // Bug Fix #4: Generate branded HTML email template
-    const emailHTML = generateProposalEmailHTML({
-      clientName: clientName || 'Valued Client',
-      projectName,
-      timeline: formattedTimeline,
-      budgetRange: formattedCost,
-      keyDeliverables: 'See attached proposal',
-      proposalLink: '#', // Can be updated if PDF storage is implemented
-      agencyName: agencyDetails.name,
-      agencyEmail: agencyDetails.email,
-      agencyLogo: agencyDetails.logo,
-      primaryColor: '#2d6ef5'
+    // Build proposal link and WhatsApp CTA link
+    const proposalLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/workspace/${projectId}`
+    const agencyNameForWA = agencyDetails.name || 'ProjectPilot'
+    const waMessage = `Hey, I'm from ${agencyNameForWA}, let's schedule the kickoff call.`
+    const whatsappLink = `https://wa.me/9265037415?text=${encodeURIComponent(waMessage)}`
+
+    const emailTemplate = generateProposalEmailHTML({
+      CLIENT_NAME: clientName || 'Valued Client',
+      PROJECT_NAME: projectName,
+      ESTIMATED_TIMELINE: formattedTimeline,
+      ESTIMATED_COST: formattedCost,
+      KEY_DELIVERABLES: 'See attached proposal',
+      PROPOSAL_LINK: proposalLink,
+      WHATSAPP_LINK: whatsappLink,
+      AGENCY_NAME: agencyDetails.name,
+      AGENCY_EMAIL: agencyDetails.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com',
+      PRIMARY_COLOR: '#4F46E5'
+    })
+    const emailHTML = renderEmailTemplate(emailTemplate, {
+      CLIENT_NAME: clientName || 'Valued Client',
+      PROJECT_NAME: projectName,
+      ESTIMATED_TIMELINE: formattedTimeline,
+      ESTIMATED_COST: formattedCost,
+      KEY_DELIVERABLES: 'See attached proposal',
+      PROPOSAL_LINK: proposalLink,
+      WHATSAPP_LINK: whatsappLink,
+      AGENCY_NAME: agencyDetails.name,
+      AGENCY_EMAIL: agencyDetails.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com',
+      PRIMARY_COLOR: '#4F46E5'
     })
 
     // Validate template has all placeholders filled
     const templateValidation = validateEmailTemplate(emailHTML)
     if (!templateValidation.valid) {
-      console.error('Email template validation failed:', templateValidation.error)
-      return new Response(`Email template error: ${templateValidation.error}`, { status: 500 })
+      console.error('Email template validation failed:', templateValidation.missing)
+      return new Response(`Email template error: missing ${templateValidation.missing.join(', ')}`, { status: 500 })
     }
 
-    const senderEmail = agencyDetails.email
-    
+    // Always send FROM the verified domain (RESEND_FROM_EMAIL).
+    // Resend only allows sending from verified domains — gmail/personal domains will be rejected.
+    // The agency email goes into Reply-To so replies land in the right inbox.
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@projectpilot.com'
+    const replyToEmail = agencyDetails.email || fromEmail
+
     // Send the email
     const { data, error } = await resend.emails.send({
-      from: `${agencyDetails.name} <${senderEmail}>`,
+      from: `${agencyDetails.name} <${fromEmail}>`,
+      replyTo: replyToEmail,
       to: [clientEmail],
       subject: `Project Proposal: ${projectName}`,
       html: emailHTML,
