@@ -285,14 +285,7 @@ export function AdminProjectsClient({
                         <p className="font-semibold text-foreground">{proj.title || 'Untitled'}</p>
                       </td>
                       <td className="px-6 py-4">
-                        {proj.client_name ? (
-                          <div>
-                            <p className="font-medium">{proj.client_name}</p>
-                            <p className="text-xs text-muted-foreground">{user?.name}</p>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">{user?.name || '—'}</span>
-                        )}
+                        <span className="text-muted-foreground">{user?.email || '—'}</span>
                       </td>
                       <td className="px-6 py-4">
                         {proj.domain ? (

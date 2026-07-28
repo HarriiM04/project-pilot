@@ -20,10 +20,10 @@ export default async function AdminDashboard() {
   if (adminOrgId) pq = pq.eq('org_id', adminOrgId)
   const { data: projects } = await pq
 
-  let prq = supabase.from('profiles').select('id, full_name')
+  let prq = supabase.from('profiles').select('id, full_name, email')
   if (adminOrgId) prq = prq.eq('org_id', adminOrgId)
   const { data: profiles } = await prq
-  const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name || 'Unknown']))
+  const profileMap = new Map((profiles || []).map(p => [p.id, { name: p.full_name || 'Unknown', email: p.email || '' }]))
 
   let orgName = 'All Organizations'
   if (adminOrgId) {
@@ -118,7 +118,7 @@ export default async function AdminDashboard() {
                   return (
                     <tr key={proj.id} className="transition-colors hover:bg-muted/20">
                       <td className="px-6 py-4 font-semibold">{proj.title || 'Untitled'}</td>
-                      <td className="px-6 py-4 text-muted-foreground">{proj.client_name || profileMap.get(proj.user_id) || '—'}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{profileMap.get(proj.user_id)?.email || '—'}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
