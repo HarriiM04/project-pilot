@@ -109,7 +109,7 @@ export function ProposalEditor({
     
     // Trigger auto-save with the updated sections
     const updatedMarkdown = updatedSections
-      .map((section) => `${section.heading}\n${section.content}`)
+      .map((section) => `## ${section.heading}\n${section.content}`)
       .join('\n\n')
     scheduleAutoSave(updatedMarkdown)
   }
@@ -120,7 +120,7 @@ export function ProposalEditor({
   }
 
   const getUpdatedMarkdown = (): string => {
-    return sections.map((section) => `${section.heading}\n${section.content}`).join('\n\n')
+    return sections.map((section) => `## ${section.heading}\n${section.content}`).join('\n\n')
   }
 
   // Auto-save function with debouncing

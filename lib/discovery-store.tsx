@@ -73,6 +73,13 @@ export interface SendProposalData {
   estimatedTimeline: string
   expiryDate?: string
   personalMessage?: string
+  breakdown?: Array<{
+    id: string
+    title: string
+    description: string
+    cost: string
+    timeline: string
+  }>
 }
 
 const DiscoveryContext = createContext<DiscoveryContextValue | null>(null)
@@ -384,6 +391,7 @@ export function DiscoveryProvider({
             expiryDate: data.expiryDate,
             personalMessage: data.personalMessage,
             proposalMarkdown: proposalDraft,
+            breakdown: data.breakdown,
           }),
         })
 

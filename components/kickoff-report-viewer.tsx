@@ -1,5 +1,4 @@
 'use client'
-'use client'
 
 import { useState, useEffect, useRef, ReactNode } from 'react'
 import {
@@ -67,7 +66,7 @@ function ReportContentFormatter({ markdown }: { markdown: string }) {
           {headers.map((h, i) => {
             const cellVal = row[i] || ''
             if (!cellVal) return null
-            
+
             if (cellVal.includes('•')) {
               const parts = cellVal.split('•').map(p => p.trim()).filter(Boolean)
               return (
@@ -477,7 +476,7 @@ export function KickoffReportViewer() {
         setDocMetadata(null)
         return
       }
-      
+
       try {
         const res = await fetch(`/api/report?projectId=${projectId}&docType=${docType}`)
         if (res.ok && !cancelled) {
@@ -490,7 +489,7 @@ export function KickoffReportViewer() {
             setDocMetadata(null)
           }
         }
-      } catch { 
+      } catch {
         if (!cancelled) {
           setReportMarkdown(null)
           setDocMetadata(null)
@@ -533,7 +532,7 @@ export function KickoffReportViewer() {
         buf += dec.decode(value, { stream: true })
         setReportMarkdown(buf)
       }
-      
+
       const checkRes = await fetch(`/api/report?projectId=${projectId}&docType=${docType}`)
       if (checkRes.ok) {
         const d = await checkRes.json()
@@ -601,7 +600,7 @@ export function KickoffReportViewer() {
       await handleGenerateProposal()
       return
     }
-    
+
     if (docMetadata?.status === 'Approved') {
       const parts = (docMetadata.version || '1.0').split('.')
       let nextVer = '1.1'
@@ -627,7 +626,7 @@ export function KickoffReportViewer() {
         body: JSON.stringify({ projectId, docType })
       })
       if (!res.ok) throw new Error(await res.text() || 'Failed to approve report')
-      
+
       const d = await res.json()
       if (d.success) {
         setDocMetadata(d.report.metadata || null)
@@ -654,7 +653,7 @@ export function KickoffReportViewer() {
         body: JSON.stringify({ projectId, docType: 'KICKOFF', status: 'Submitted' })
       })
       if (!res.ok) throw new Error(await res.text() || 'Failed to submit requirements')
-      
+
       const d = await res.json()
       if (d.success) {
         setDocMetadata(d.report.metadata || null)
@@ -692,7 +691,7 @@ export function KickoffReportViewer() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to generate proposal'
       console.error('Proposal generation error:', err)
-      
+
       // Show user-friendly error message
       showToast(msg, 'error')
     }
@@ -716,10 +715,10 @@ export function KickoffReportViewer() {
 
   const handleDownload = async () => {
     // For proposal draft, use proposalDraft; otherwise use reportMarkdown
-    const contentToDownload = (docType === 'KICKOFF' && proposalStatus === 'draft' && proposalDraft) 
-      ? proposalDraft 
+    const contentToDownload = (docType === 'KICKOFF' && proposalStatus === 'draft' && proposalDraft)
+      ? proposalDraft
       : reportMarkdown
-    
+
     if (!contentToDownload || isDownloading) return
     setIsDownloading(true)
 
@@ -735,14 +734,14 @@ export function KickoffReportViewer() {
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
-      const pageW    = doc.internal.pageSize.getWidth()
-      const pageH    = doc.internal.pageSize.getHeight()
-      const marginL  = 18
-      const marginR  = 18
-      const marginT  = 32
-      const marginB  = 21
-      const maxW     = pageW - marginL - marginR
-      let   y        = marginT
+      const pageW = doc.internal.pageSize.getWidth()
+      const pageH = doc.internal.pageSize.getHeight()
+      const marginL = 18
+      const marginR = 18
+      const marginT = 32
+      const marginB = 21
+      const maxW = pageW - marginL - marginR
+      let y = marginT
 
       const checkY = (needed: number) => {
         if (y + needed > pageH - marginB) {
@@ -786,7 +785,7 @@ export function KickoffReportViewer() {
         const startX = (pageW - tableW) / 2
         const rowHeight = 8
         const col1W = 45
-        
+
         const versionVal = `v${docMetadata?.version || '1.0'}`
         const statusVal = docMetadata?.status || 'Draft'
         const dateVal = docMetadata?.date || formatDate(new Date())
@@ -813,7 +812,7 @@ export function KickoffReportViewer() {
           }
 
           doc.line(startX, rowY + rowHeight, startX + tableW, rowY + rowHeight)
-          
+
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(9.5)
           doc.setTextColor(30, 41, 59)
@@ -855,7 +854,7 @@ export function KickoffReportViewer() {
             console.error('Failed to render PDF agency logo:', e)
           }
         }
-        
+
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(10)
         doc.setTextColor(26, 35, 64)
@@ -883,7 +882,7 @@ export function KickoffReportViewer() {
       const calculateColWidths = (headers: string[], rows: string[][], tableWidth: number): number[] => {
         const colCount = headers.length
         if (colCount === 0) return []
-        
+
         // 1. Analyze text length for each column
         const colMaxLens = headers.map((h, cIdx) => {
           let maxLen = decodeHtmlEntities(h.trim()).length
@@ -957,7 +956,7 @@ export function KickoffReportViewer() {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(fontSize)
         doc.setTextColor(255, 255, 255)
-        
+
         headers.forEach((h, i) => {
           let colStartX = tableStartX + colWidths.slice(0, i).reduce((sum, w) => sum + w, 0)
           doc.text(sanitizeForPDF(decodeHtmlEntities(h.trim())), colStartX + 2.5, y + headerTextY)
@@ -994,10 +993,10 @@ export function KickoffReportViewer() {
             }
             return cellLines
           })
-          
+
           const maxLines = Math.max(...cellLinesList.map(lines => lines.length), 1)
           const rHeight = maxLines * lineSpacing + vertPadding
-          
+
           // Page break check inside table rows
           if (rowY + rHeight > pageH - marginB) {
             // Box the table segment on the current page
@@ -1009,7 +1008,7 @@ export function KickoffReportViewer() {
             doc.addPage()
             y = marginT
             rowY = y + hHeight
-            
+
             // Redraw table header on the new page
             doc.setFillColor(26, 35, 64)
             doc.rect(tableStartX, y, tableWidth, hHeight, 'F')
@@ -1031,7 +1030,7 @@ export function KickoffReportViewer() {
               }
               hColStartX2 += colW
             })
-            
+
             doc.setFont('helvetica', 'normal')
             doc.setFontSize(fontSize)
           }
@@ -1134,11 +1133,11 @@ export function KickoffReportViewer() {
                   doc.setFontSize(9.5)
                   doc.setTextColor(26, 35, 64)
                   doc.text(`${header}:`, marginL, y)
-                  
+
                   doc.setFont('helvetica', 'normal')
                   doc.setTextColor(55, 65, 81)
                   const cleanVal = sanitizeForPDF(decodeHtmlEntities(cellVal)).replace(/\*\*(.*?)\*\*/g, '$1')
-                  
+
                   if (cleanVal.includes('•')) {
                     const parts = cleanVal.split('•').map(p => p.trim()).filter(Boolean)
                     y += 4
@@ -1163,7 +1162,7 @@ export function KickoffReportViewer() {
               const headerH = isMultiCol ? 7 : 8
               const minRowH = 12
               checkY(headerH + minRowH)
-              
+
               const endTableY = drawPDFTable(tblHeaders, tblBody, marginL, maxW)
               y = endTableY + 6
             }
@@ -1248,7 +1247,7 @@ export function KickoffReportViewer() {
           doc.setFontSize(9.5)
           doc.setTextColor(55, 65, 81)
           const clean = sanitizeForPDF(decodeHtmlEntities(line.slice(2))).replace(/\*\*(.*?)\*\*/g, '$1')
-          
+
           if (clean.includes('•')) {
             const parts = clean.split('•').map(p => p.trim()).filter(Boolean)
             parts.forEach(p => {
@@ -1273,7 +1272,7 @@ export function KickoffReportViewer() {
           doc.setFontSize(9.5)
           doc.setTextColor(55, 65, 81)
           const clean = sanitizeForPDF(decodeHtmlEntities(line)).replace(/\*\*(.*?)\*\*/g, '$1')
-          
+
           if (clean.includes('•')) {
             const parts = clean.split('•').map(p => p.trim()).filter(Boolean)
             parts.forEach(p => {
@@ -1354,14 +1353,14 @@ export function KickoffReportViewer() {
       }
 
       const camelProjectName = toCamelCase(discovery.projectName || 'ProjectPilot')
-      
+
       // Use "Proposal" filename when downloading edited proposal draft
       const isProposal = (docType === 'KICKOFF' && proposalStatus === 'draft' && proposalDraft)
       const filename = isProposal
         ? `Proposal_${camelProjectName}.pdf`
         : docType === 'KICKOFF'
-        ? `RequirementSummary_${camelProjectName}.pdf`
-        : `${docType}_${camelProjectName}.pdf`
+          ? `RequirementSummary_${camelProjectName}.pdf`
+          : `${docType}_${camelProjectName}.pdf`
 
       let saved = false
       if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
@@ -1406,10 +1405,10 @@ export function KickoffReportViewer() {
 
   const allTabs = [
     { id: 'KICKOFF', label: 'Requirement Summary' },
-    { id: 'BRD',     label: 'BRD' },
-    { id: 'PRD',     label: 'PRD' },
-    { id: 'SRS',     label: 'SRS' },
-    { id: 'SOW',     label: 'SOW' },
+    { id: 'BRD', label: 'BRD' },
+    { id: 'PRD', label: 'PRD' },
+    { id: 'SRS', label: 'SRS' },
+    { id: 'SOW', label: 'SOW' },
     { id: 'PROPOSAL', label: 'Proposal' },
   ] as const
 
@@ -1478,7 +1477,7 @@ export function KickoffReportViewer() {
                 </span>
               )}
             </div>
-            
+
             {/* Right actions */}
             <div className="flex items-center gap-2">
               {reportMarkdown && (
@@ -1658,8 +1657,8 @@ export function KickoffReportViewer() {
                 {isGenerating
                   ? <><Loader2 className="size-3.5 animate-spin" /><span>Synthesizing…</span></>
                   : reportMarkdown
-                  ? <><Sparkles className="size-3.5" /><span>Regenerate</span></>
-                  : <><Zap className="size-3.5" /><span>Generate {docTypeMap[docType]}</span></>
+                    ? <><Sparkles className="size-3.5" /><span>Regenerate</span></>
+                    : <><Zap className="size-3.5" /><span>Generate {docTypeMap[docType]}</span></>
                 }
               </button>
             </div>
@@ -1856,13 +1855,13 @@ export function KickoffReportViewer() {
             {/* Checklist items */}
             <div className="space-y-2.5">
               {(discovery.sections || [
-                { key: 'business_goals',    label: 'Business Goals & Objectives',    completion: 0 },
-                { key: 'target_users',      label: 'Target Users & Persona Mapping',  completion: 0 },
-                { key: 'functional_scope',  label: 'Core Functional Scope',           completion: 0 },
+                { key: 'business_goals', label: 'Business Goals & Objectives', completion: 0 },
+                { key: 'target_users', label: 'Target Users & Persona Mapping', completion: 0 },
+                { key: 'functional_scope', label: 'Core Functional Scope', completion: 0 },
                 { key: 'non_functional_reqs', label: 'Non-Functional Reqs & Compliance', completion: 0 },
-                { key: 'constraints',       label: 'Constraints & Tech Stack Fit',    completion: 0 },
+                { key: 'constraints', label: 'Constraints & Tech Stack Fit', completion: 0 },
               ]).map((sec) => {
-                const done    = sec.completion >= 80
+                const done = sec.completion >= 80
                 const partial = sec.completion > 0 && sec.completion < 80
                 return (
                   <div
@@ -1906,8 +1905,8 @@ export function KickoffReportViewer() {
                       style={done
                         ? { background: 'rgba(45,110,245,0.12)', color: '#2d6ef5' }
                         : partial
-                        ? { background: 'rgba(245,158,11,0.12)', color: '#d97706' }
-                        : { background: 'var(--muted)', color: 'var(--muted-foreground)' }
+                          ? { background: 'rgba(245,158,11,0.12)', color: '#d97706' }
+                          : { background: 'var(--muted)', color: 'var(--muted-foreground)' }
                       }
                     >
                       {sec.completion || 0}%
@@ -1920,11 +1919,11 @@ export function KickoffReportViewer() {
             {/* CTA card */}
             <div className="rounded-2xl border border-border/60 bg-card p-5">
               <p className="text-xs text-muted-foreground mb-3">
-                {(docType as string) === 'PROPOSAL' 
+                {(docType as string) === 'PROPOSAL'
                   ? 'Generate a comprehensive proposal from your requirement documents.'
                   : overallProgress >= 85
-                  ? `Discovery complete — synthesize your ${docTypeMap[docType]} deliverable now.`
-                  : `Chat with Pilot or attach a PDF to advance discovery for ${docTypeMap[docType]}.`
+                    ? `Discovery complete — synthesize your ${docTypeMap[docType]} deliverable now.`
+                    : `Chat with Pilot or attach a PDF to advance discovery for ${docTypeMap[docType]}.`
                 }
               </p>
               <button
@@ -1936,10 +1935,10 @@ export function KickoffReportViewer() {
                 {((docType as string) === 'PROPOSAL' ? isGeneratingProposal : isGenerating)
                   ? <><Loader2 className="size-4 animate-spin" /><span>Generating…</span></>
                   : docType === 'KICKOFF'
-                  ? <><Sparkles className="size-4" /><span>Get Summary</span></>
-                  : (docType as string) === 'PROPOSAL'
-                  ? <><Sparkles className="size-4" /><span>Generate Proposal Draft</span></>
-                  : <><Sparkles className="size-4" /><span>Generate {docTypeMap[docType]} Now</span></>
+                    ? <><Sparkles className="size-4" /><span>Get Summary</span></>
+                    : (docType as string) === 'PROPOSAL'
+                      ? <><Sparkles className="size-4" /><span>Generate Proposal Draft</span></>
+                      : <><Sparkles className="size-4" /><span>Generate {docTypeMap[docType]} Now</span></>
                 }
               </button>
             </div>

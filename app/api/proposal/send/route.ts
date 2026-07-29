@@ -41,11 +41,11 @@ function sanitizeForPDF(text: string): string {
     .replace(/\s*≤\s*/g, ' <= ')
     .replace(/\s*≥\s*/g, ' >= ')
     .replace(/'/g, "'")
-    .replace(/'/g, "'")
-    .replace(/"/g, '"')
     .replace(/"/g, '"')
     .replace(/…/g, '...')
-    .replace(/\s+/g, ' ')
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/[ \t]+/g, ' ')
     .trim()
 }
 
@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
       proposalMarkdown,
       expiryDate,
       personalMessage,
+      breakdown,
     } = body
 
     // Validate required fields
@@ -152,9 +153,21 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Finalize proposal by replacing placeholders ──
+    let costReplacement = validatedCost
+    if (breakdown && Array.isArray(breakdown) && breakdown.length > 0) {
+      costReplacement += '\n\n**Cost & Timeline Breakdown:**\n'
+      breakdown.forEach((item: any) => {
+        costReplacement += `\n* **${item.title}**: ${item.cost} (${item.timeline})`
+        if (item.description) {
+          costReplacement += `\n  ${item.description}`
+        }
+      })
+      costReplacement += '\n'
+    }
+
     let finalProposalMarkdown = proposalMarkdown
       .replace(/\[PLACEHOLDER:\s*Estimated Timeline[^\]]*\]/gi, validatedTimeline)
-      .replace(/\[PLACEHOLDER:\s*Project Cost[^\]]*\]/gi, validatedCost)
+      .replace(/\[PLACEHOLDER:\s*Project Cost[^\]]*\]/gi, costReplacement)
 
     // Sanitize any internal-notes content across all sections
     finalProposalMarkdown = sanitizeNextStepsSection(finalProposalMarkdown)
@@ -175,70 +188,249 @@ export async function POST(req: NextRequest) {
     // Sanitize all text for PDF rendering
     const pdfSafeMarkdown = sanitizeForPDF(finalProposalMarkdown)
 
+    // ── Parse Agency Details for Branding ──
+    const agencyDetails = parseAgencyDetails(profile)
+    const agencyName = agencyDetails?.name || 'ProjectPilot'
+    const agencyEmail = agencyDetails?.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
+    const brandColor: [number, number, number] = [79, 70, 229] // Default Indigo (Tailwind #4F46E5)
+    
+    let logoBase64: string | null = null
+    let logoFormat = 'PNG'
+    if (agencyDetails?.logo) {
+      try {
+        const logoUrl = new URL(agencyDetails.logo, process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').href
+        const logoRes = await fetch(logoUrl)
+        if (logoRes.ok) {
+          const contentType = logoRes.headers.get('content-type') || ''
+          logoFormat = contentType.includes('jpeg') || contentType.includes('jpg') ? 'JPEG' : 'PNG'
+          const logoBuffer = await logoRes.arrayBuffer()
+          logoBase64 = Buffer.from(logoBuffer).toString('base64')
+        }
+      } catch (e) {
+        console.error('[PROPOSAL] Failed to fetch agency logo', e)
+      }
+    }
+
     // ── Generate PDF from proposal markdown ──
-    console.log('[PROPOSAL] Generating PDF...')
+    console.log('[PROPOSAL] Generating Professional PDF...')
     const pdfDoc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pageHeight = pdfDoc.internal.pageSize.getHeight()
     const pageWidth = pdfDoc.internal.pageSize.getWidth()
-    const margin = 15
+    const margin = 20
     const maxWidth = pageWidth - margin * 2
+    const lineHeight = 6
+    const pageHeightLimit = pageHeight - margin - 15 // Leave space for footer
+    
+    // --- PHASE 1: Cover Page ---
+    let yPosition = margin + 10
+    
+    // Draw Logo
+    if (logoBase64) {
+      pdfDoc.addImage(logoBase64, logoFormat, margin, yPosition, 25, 25)
+      yPosition += 45
+    } else {
+      yPosition += 25
+    }
 
-    let yPosition = margin
-    const lineHeight = 5
-    const pageHeightLimit = pageHeight - margin
+    // Draw Proposal Title
+    pdfDoc.setFontSize(28)
+    pdfDoc.setFont('helvetica', 'bold')
+    pdfDoc.setTextColor(brandColor[0], brandColor[1], brandColor[2])
+    const titleText = 'Project Proposal'
+    pdfDoc.text(titleText, margin, yPosition)
+    yPosition += 15
 
-    // Split markdown into lines and render
-    const lines = pdfSafeMarkdown.split('\n')
-    pdfDoc.setFontSize(11)
+    // Draw Project Name
+    pdfDoc.setFontSize(18)
     pdfDoc.setFont('helvetica', 'normal')
+    pdfDoc.setTextColor(40, 50, 75)
+    const splitProjectName = pdfDoc.splitTextToSize(project.title || 'Custom Project', maxWidth)
+    pdfDoc.text(splitProjectName, margin, yPosition)
+    yPosition += splitProjectName.length * 8 + 20
 
+    // Draw Highlight Box for Client & Date
+    pdfDoc.setFillColor(248, 250, 252) // slate-50
+    pdfDoc.setDrawColor(226, 232, 240) // slate-200
+    pdfDoc.rect(margin, yPosition, maxWidth, 45, 'FD')
+    
+    yPosition += 12
+    pdfDoc.setFontSize(10)
+    pdfDoc.setFont('helvetica', 'bold')
+    pdfDoc.setTextColor(100, 116, 139) // slate-500
+    pdfDoc.text('PREPARED FOR', margin + 8, yPosition)
+    pdfDoc.text('PREPARED BY', margin + maxWidth / 2, yPosition)
+    
+    yPosition += 8
+    pdfDoc.setFontSize(14)
+    pdfDoc.setFont('helvetica', 'bold')
+    pdfDoc.setTextColor(15, 23, 42) // slate-900
+    const splitClient = pdfDoc.splitTextToSize(clientName, maxWidth / 2 - 16)
+    const splitAgency = pdfDoc.splitTextToSize(agencyName, maxWidth / 2 - 16)
+    pdfDoc.text(splitClient, margin + 8, yPosition)
+    pdfDoc.text(splitAgency, margin + maxWidth / 2, yPosition)
+    
+    yPosition += Math.max(splitClient.length, splitAgency.length) * 6 + 4
+    pdfDoc.setFontSize(10)
+    pdfDoc.setFont('helvetica', 'normal')
+    pdfDoc.setTextColor(100, 116, 139)
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    pdfDoc.text(`Date: ${dateStr}`, margin + 8, yPosition)
+
+    // --- PHASE 2: Reserved TOC Page ---
+    pdfDoc.addPage()
+    const tocPageNumber = 2
+
+    // --- PHASE 3: Content Parsing & Layout ---
+    pdfDoc.addPage() // Start content on Page 3
+    yPosition = margin
+
+    const lines = pdfSafeMarkdown.split('\n')
+    const tocEntries: { title: string; page: number; level: number }[] = []
+    
     for (const line of lines) {
       const trimmed = line.trim()
+      
+      if (trimmed === '') {
+        yPosition += 3
+        continue
+      }
 
       // Handle section headings
-      if (trimmed.startsWith('## ')) {
-        if (yPosition > margin) yPosition += 5
-        pdfDoc.setFontSize(13)
+      const headingMatch = trimmed.match(/^(#{1,3})\s+(.*)/)
+      if (headingMatch) {
+        const level = headingMatch[1].length
+        let title = headingMatch[2]
+        
+        // Remove markdown bold from headings if any leaked through
+        title = title.replace(/\*\*/g, '').replace(/__/g, '')
+        
+        if (yPosition > margin) yPosition += (level === 1 ? 10 : 7)
+        
+        // Check for page break
+        if (yPosition > pageHeightLimit - 15) {
+          pdfDoc.addPage()
+          yPosition = margin
+        }
+        
+        // Track TOC for H2 and H3
+        if (level === 2 || level === 3) {
+          tocEntries.push({ title, page: pdfDoc.getCurrentPageInfo().pageNumber, level })
+        }
+        
+        pdfDoc.setFontSize(level === 1 ? 18 : level === 2 ? 14 : 12)
         pdfDoc.setFont('helvetica', 'bold')
-        pdfDoc.setTextColor(26, 35, 64)
-        const title = trimmed.slice(3)
+        if (level === 2) {
+          pdfDoc.setTextColor(brandColor[0], brandColor[1], brandColor[2])
+        } else {
+          pdfDoc.setTextColor(30, 41, 59)
+        }
+        
         const splitTitle = pdfDoc.splitTextToSize(title, maxWidth)
         pdfDoc.text(splitTitle, margin, yPosition)
-        yPosition += splitTitle.length * lineHeight + 3
+        yPosition += splitTitle.length * lineHeight + (level === 1 ? 4 : 2)
+        
+        // Draw divider for H2
+        if (level === 2) {
+          pdfDoc.setDrawColor(226, 232, 240)
+          pdfDoc.line(margin, yPosition - 2, margin + maxWidth, yPosition - 2)
+          yPosition += 4
+        }
+      } else {
+        // Handle body text and list items
+        let textToRender = trimmed
+        let indent = margin
+        let textWidth = maxWidth
+        
         pdfDoc.setFontSize(11)
         pdfDoc.setFont('helvetica', 'normal')
-        pdfDoc.setTextColor(0, 0, 0)
-      } else if (trimmed === '') {
-        yPosition += 2
-      } else {
-        const splitText = pdfDoc.splitTextToSize(trimmed, maxWidth)
+        pdfDoc.setTextColor(51, 65, 85)
+        
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+          textToRender = '• ' + trimmed.slice(2)
+          indent = margin + 5
+          textWidth = maxWidth - 5
+        } else if (trimmed.match(/^\d+\.\s/)) {
+          indent = margin + 5
+          textWidth = maxWidth - 5
+        }
+        
+        const splitText = pdfDoc.splitTextToSize(textToRender, textWidth)
         for (const textLine of splitText) {
           if (yPosition > pageHeightLimit) {
             pdfDoc.addPage()
             yPosition = margin
           }
-          pdfDoc.text(textLine, margin, yPosition)
+          pdfDoc.text(textLine, indent, yPosition)
           yPosition += lineHeight
         }
       }
+    }
 
-      // Check for page break
-      if (yPosition > pageHeightLimit) {
-        pdfDoc.addPage()
-        yPosition = margin
+    // --- PHASE 4: Draw Table of Contents ---
+    pdfDoc.setPage(tocPageNumber)
+    let tocY = margin + 10
+    
+    pdfDoc.setFontSize(18)
+    pdfDoc.setFont('helvetica', 'bold')
+    pdfDoc.setTextColor(brandColor[0], brandColor[1], brandColor[2])
+    pdfDoc.text('Table of Contents', margin, tocY)
+    tocY += 15
+    
+    pdfDoc.setFontSize(11)
+    pdfDoc.setTextColor(51, 65, 85)
+    
+    for (const entry of tocEntries) {
+      if (tocY > pageHeightLimit - 10) break // Skip if TOC overflows single page for now
+      
+      const isSub = entry.level === 3
+      const tocIndent = margin + (isSub ? 8 : 0)
+      
+      pdfDoc.setFont('helvetica', isSub ? 'normal' : 'bold')
+      pdfDoc.text(entry.title, tocIndent, tocY)
+      pdfDoc.text(entry.page.toString(), pageWidth - margin, tocY, { align: 'right' })
+      
+      // Draw dotted leader
+      pdfDoc.setFont('helvetica', 'normal')
+      const titleWidth = pdfDoc.getTextWidth(entry.title)
+      const numWidth = pdfDoc.getTextWidth(entry.page.toString())
+      const dotSpace = 3
+      let dotX = tocIndent + titleWidth + 3
+      const endX = pageWidth - margin - numWidth - 3
+      
+      while (dotX < endX) {
+        pdfDoc.text('.', dotX, tocY)
+        dotX += dotSpace
       }
+      
+      tocY += isSub ? 7 : 9
+    }
+
+    // --- PHASE 5: Draw Footers on All Pages ---
+    const totalPages = pdfDoc.getNumberOfPages()
+    for (let i = 1; i <= totalPages; i++) {
+      pdfDoc.setPage(i)
+      const footerY = pageHeight - 12
+      
+      // Divider line
+      pdfDoc.setDrawColor(226, 232, 240)
+      pdfDoc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+      
+      pdfDoc.setFontSize(8)
+      pdfDoc.setFont('helvetica', 'normal')
+      pdfDoc.setTextColor(148, 163, 184) // slate-400
+      
+      pdfDoc.text(`Prepared by ${agencyName}`, margin, footerY)
+      pdfDoc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, footerY, { align: 'center' })
+      pdfDoc.text('Powered by ProjectPilot', pageWidth - margin, footerY, { align: 'right' })
     }
 
     const pdfBlob = pdfDoc.output('blob')
     const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer())
     const base64Pdf = pdfBuffer.toString('base64')
 
-    console.log('[PROPOSAL] PDF generated:', pdfBuffer.length, 'bytes')
+    console.log('[PROPOSAL] Premium PDF generated:', pdfBuffer.length, 'bytes')
 
     // ── BUG FIX #4: Use branded HTML template ──
-    const agencyDetails = parseAgencyDetails(profile)
-    const agencyName = agencyDetails?.name || 'ProjectPilot'
-    const agencyEmail = agencyDetails?.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
     const proposalLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/workspace/${projectId}`
 
     // Build WhatsApp CTA link with URL-encoded prefilled message using brand name
