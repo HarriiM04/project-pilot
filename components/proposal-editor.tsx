@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Loader2, Send, Edit2, Save, X } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Loader2, Send, Edit2, Save, X, Check, Cloud } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/toast-container'
 
 interface ProposalEditorProps {
   projectId: string
+  proposalId: string
   initialMarkdown: string
   onSend?: (markdown: string) => void
   isSending?: boolean
+  onUpdate?: (markdown: string) => void
 }
 
 interface EditableSection {
@@ -26,21 +28,57 @@ interface EditableSection {
  */
 export function ProposalEditor({
   projectId,
+  proposalId,
   initialMarkdown,
   onSend,
   isSending = false,
+  onUpdate,
 }: ProposalEditorProps) {
   const { showToast } = useToast()
   const [sections, setSections] = useState<EditableSection[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isLocalUpdate = useRef(false) // Track if update is from our own save
+  const hasInitialized = useRef(false) // Track if we've done initial parse
 
   // Parse markdown into editable sections
   useEffect(() => {
+    // Always parse on first mount
+    if (!hasInitialized.current) {
+      hasInitialized.current = true
+      const parsed = parseProposalMarkdown(initialMarkdown)
+      setSections(parsed)
+      return
+    }
+    
+    // Don't re-parse if this is our own update
+    if (isLocalUpdate.current) {
+      isLocalUpdate.current = false
+      return
+    }
+    
+    // Re-parse if markdown actually changed (e.g., regeneration)
     const parsed = parseProposalMarkdown(initialMarkdown)
     setSections(parsed)
   }, [initialMarkdown])
+
+  // Reset editing state when proposalId changes (e.g., after regeneration)
+  useEffect(() => {
+    // Reset initialization flag when proposal changes
+    hasInitialized.current = false
+    setEditingId(null)
+    setEditValue('')
+    setSaveStatus('idle')
+    
+    // Clear any pending auto-save timers
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+  }, [proposalId])
 
   // Auto-resize textarea
   useEffect(() => {
@@ -56,11 +94,24 @@ export function ProposalEditor({
   }
 
   const handleSaveEdit = (id: string) => {
-    setSections((prevSections) =>
-      prevSections.map((s) => (s.id === id ? { ...s, content: editValue } : s))
+    // Calculate updated sections first
+    const updatedSections = sections.map((s) => 
+      s.id === id ? { ...s, content: editValue } : s
     )
+    
+    // Update state
+    setSections(updatedSections)
     setEditingId(null)
     showToast('Section updated', 'success')
+    
+    // Mark as local update BEFORE triggering auto-save
+    isLocalUpdate.current = true
+    
+    // Trigger auto-save with the updated sections
+    const updatedMarkdown = updatedSections
+      .map((section) => `${section.heading}\n${section.content}`)
+      .join('\n\n')
+    scheduleAutoSave(updatedMarkdown)
   }
 
   const handleCancel = () => {
@@ -71,6 +122,87 @@ export function ProposalEditor({
   const getUpdatedMarkdown = (): string => {
     return sections.map((section) => `${section.heading}\n${section.content}`).join('\n\n')
   }
+
+  // Auto-save function with debouncing
+  const scheduleAutoSave = useCallback((markdown: string) => {
+    // Clear existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+    }
+
+    // Set status to saving after a brief delay to avoid flashing
+    setSaveStatus('saving')
+
+    // Schedule save after 2 seconds of inactivity
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proposals/${proposalId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proposal_markdown: markdown }),
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          
+          // Handle specific error cases
+          if (res.status === 404) {
+            throw new Error('Proposal not found')
+          } else if (res.status === 401) {
+            throw new Error('Unauthorized')
+          } else if (res.status === 403) {
+            throw new Error('Forbidden')
+          } else if (res.status === 429) {
+            throw new Error('Rate limit exceeded')
+          } else {
+            throw new Error(text || `Failed to save (${res.status})`)
+          }
+        }
+
+        setSaveStatus('saved')
+        
+        // Notify parent component of the update
+        if (onUpdate) {
+          onUpdate(markdown)
+        }
+
+        // Reset to idle after showing "saved" for 2 seconds
+        setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch (err) {
+        console.error('Auto-save error:', err)
+        setSaveStatus('error')
+        
+        // Show user-friendly error message based on the error type
+        if (err instanceof Error) {
+          if (err.message.includes('Proposal not found')) {
+            showToast('Auto-save failed: Proposal not found', 'error')
+          } else if (err.message.includes('Unauthorized') || err.message.includes('Forbidden')) {
+            showToast('Auto-save failed: Permission denied', 'error')
+          } else if (err.message.includes('Rate limit exceeded')) {
+            showToast('Auto-save failed: Too many requests', 'error')
+          } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+            showToast('Auto-save failed: Network error', 'error')
+          } else {
+            showToast(`Auto-save failed: ${err.message}`, 'error')
+          }
+        } else {
+          showToast('Auto-save failed: Unknown error', 'error')
+        }
+        
+        // Reset to idle after showing error for 3 seconds
+        setTimeout(() => setSaveStatus('idle'), 3000)
+      }
+    }, 2000)
+  }, [proposalId, onUpdate, showToast])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+    }
+  }, [])
 
   const handleSendProposal = () => {
     const updatedMarkdown = getUpdatedMarkdown()
@@ -87,23 +219,46 @@ export function ProposalEditor({
           <h2 className="text-2xl font-bold text-foreground">Proposal Draft</h2>
           <p className="text-sm text-muted-foreground">Review and edit sections before sending</p>
         </div>
-        <Button
-          onClick={handleSendProposal}
-          disabled={isSending || editingId !== null}
-          className="gap-2"
-        >
-          {isSending ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              <span>Finalizing...</span>
-            </>
-          ) : (
-            <>
-              <Send className="size-4" />
-              <span>Finalize & Send</span>
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Auto-save status indicator */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {saveStatus === 'saving' && (
+              <>
+                <Cloud className="size-3.5 animate-pulse" />
+                <span>Saving...</span>
+              </>
+            )}
+            {saveStatus === 'saved' && (
+              <>
+                <Check className="size-3.5 text-emerald-600" />
+                <span className="text-emerald-600">Saved</span>
+              </>
+            )}
+            {saveStatus === 'error' && (
+              <>
+                <X className="size-3.5 text-destructive" />
+                <span className="text-destructive">Save failed</span>
+              </>
+            )}
+          </div>
+          <Button
+            onClick={handleSendProposal}
+            disabled={isSending || editingId !== null}
+            className="gap-2"
+          >
+            {isSending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                <span>Finalizing...</span>
+              </>
+            ) : (
+              <>
+                <Send className="size-4" />
+                <span>Finalize & Send</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Sections */}

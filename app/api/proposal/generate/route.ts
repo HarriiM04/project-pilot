@@ -122,29 +122,80 @@ export async function POST(req: NextRequest) {
       }
 
       // Store proposal draft in database
-      const { error: upsertError } = await supabase
+      // First check if a proposal already exists for this project
+      const { data: existingProposal } = await supabase
         .from('proposals')
-        .upsert(
-          {
+        .select('id')
+        .eq('project_id', projectId)
+        .maybeSingle()
+
+      let proposalRecord
+
+      if (existingProposal) {
+        // Update existing proposal
+        const { data: updated, error: updateError } = await supabase
+          .from('proposals')
+          .update({
+            proposal_markdown: proposalMarkdown,
+            status: 'draft',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingProposal.id)
+          .select()
+          .single()
+
+        if (updateError) {
+          console.error('[PROPOSAL] Update error:', updateError)
+          return new Response(`Failed to update proposal draft: ${updateError.message}`, { status: 500 })
+        }
+
+        proposalRecord = updated
+        console.log('[PROPOSAL] Updated existing proposal:', proposalRecord.id)
+      } else {
+        // Create new proposal
+        const { data: created, error: insertError } = await supabase
+          .from('proposals')
+          .insert({
             project_id: projectId,
             proposal_markdown: proposalMarkdown,
             status: 'draft',
             draft_created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'project_id' }
-        )
+          })
+          .select()
+          .single()
 
-      if (upsertError) {
-        console.error('[PROPOSAL] Database error:', upsertError)
+        if (insertError) {
+          console.error('[PROPOSAL] Insert error:', insertError)
+          
+          // Provide specific error messages based on the error type
+          if (insertError?.code === '23505') {
+            return new Response('A proposal already exists for this project. Please try regenerating instead.', { status: 409 })
+          } else if (insertError?.code === '23503') {
+            return new Response('Project not found. Please ensure the project exists and try again.', { status: 404 })
+          } else if (insertError?.message?.includes('permission')) {
+            return new Response('Insufficient permissions to create proposal. Please check your access rights.', { status: 403 })
+          } else if (insertError?.message?.includes('connection')) {
+            return new Response('Database connection error. Please try again in a moment.', { status: 503 })
+          } else {
+            return new Response(`Failed to save proposal draft: ${insertError?.message || 'Unknown database error'}`, { status: 500 })
+          }
+        }
+
+        proposalRecord = created
+        console.log('[PROPOSAL] Created new proposal:', proposalRecord.id)
+      }
+
+      if (!proposalRecord) {
         return new Response('Failed to save proposal draft', { status: 500 })
       }
 
-      console.log('[PROPOSAL] Proposal generated successfully, length:', proposalMarkdown.length)
+      console.log('[PROPOSAL] Proposal generated successfully, ID:', proposalRecord.id, 'length:', proposalMarkdown.length)
 
       return new Response(
         JSON.stringify({
           success: true,
+          proposalId: proposalRecord.id,
           proposalDraft: proposalMarkdown,
           createdAt: new Date().toISOString(),
         }),

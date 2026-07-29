@@ -53,6 +53,7 @@ interface DiscoveryContextValue {
   isLoading: boolean
   projectId: string
   // Proposal state management
+  proposalId: string | null
   proposalDraft: string | null
   proposalStatus: 'none' | 'draft' | 'sent' // none = not generated, draft = editing, sent = finalized
   isGeneratingProposal: boolean
@@ -91,6 +92,7 @@ export function DiscoveryProvider({
   const [isStreaming, setIsStreaming] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   // Proposal state
+  const [proposalId, setProposalId] = useState<string | null>(null)
   const [proposalDraft, setProposalDraft] = useState<string | null>(null)
   const [proposalStatus, setProposalStatus] = useState<'none' | 'draft' | 'sent'>('none')
   const [isGeneratingProposal, setIsGeneratingProposal] = useState(false)
@@ -138,6 +140,7 @@ export function DiscoveryProvider({
         if (proposalRes.ok) {
           const proposalData = await proposalRes.json()
           if (proposalData.proposal) {
+            setProposalId(proposalData.proposal.id)
             setProposalDraft(proposalData.proposal.proposal_markdown)
             setProposalStatus(proposalData.proposal.status)
           }
@@ -328,11 +331,30 @@ export function DiscoveryProvider({
       }
 
       const data = await res.json()
+      setProposalId(data.proposalId)
       setProposalDraft(data.proposalDraft)
       setProposalStatus('draft')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      throw new Error(`Failed to generate proposal: ${msg}`)
+      
+      // Provide more specific error messages based on the error content
+      if (msg.includes('BRD, PRD, and SOW are required')) {
+        throw new Error('Missing required documents: Please generate BRD, PRD, and SOW first before creating a proposal.')
+      } else if (msg.includes('No kickoff report found')) {
+        throw new Error('No project requirements found: Please complete the discovery conversation first.')
+      } else if (msg.includes('Unauthorized') || msg.includes('Forbidden')) {
+        throw new Error('Access denied: You do not have permission to generate proposals for this project.')
+      } else if (msg.includes('Rate limit exceeded')) {
+        throw new Error('Too many requests: Please wait a moment before generating another proposal.')
+      } else if (msg.includes('API key not configured')) {
+        throw new Error('System configuration error: AI service is not properly configured. Please contact support.')
+      } else if (msg.includes('Failed to save proposal draft')) {
+        throw new Error('Database error: Could not save proposal draft. Please try again or contact support if the issue persists.')
+      } else if (msg.includes('Proposal generation failed')) {
+        throw new Error('AI generation error: Failed to generate proposal content. Please try again with more detailed requirements.')
+      } else {
+        throw new Error(`Failed to generate proposal: ${msg}`)
+      }
     } finally {
       setIsGeneratingProposal(false)
     }
@@ -397,6 +419,7 @@ export function DiscoveryProvider({
       sendMessage,
       updateFeatureName,
       // Proposal state
+      proposalId,
       proposalDraft,
       proposalStatus,
       isGeneratingProposal,
@@ -414,6 +437,7 @@ export function DiscoveryProvider({
       projectId,
       sendMessage,
       updateFeatureName,
+      proposalId,
       proposalDraft,
       proposalStatus,
       isGeneratingProposal,
