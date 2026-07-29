@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Mail,
   Menu,
+  ShieldCheck,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -47,11 +48,13 @@ function UserProfileDropdown({
   userName,
   userEmail,
   initials,
+  isAdmin,
   onLogout,
 }: {
   userName: string
   userEmail: string
   initials: string
+  isAdmin?: boolean
   onLogout: () => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -95,10 +98,25 @@ function UserProfileDropdown({
                   <Mail className="size-3" />
                   {userEmail}
                 </p>
+                {isAdmin && (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-ring/30 bg-ring/10 px-2 py-0.5 font-mono text-[9px] font-semibold tracking-widest text-ring">
+                    <ShieldCheck className="size-2.5" /> ADMIN
+                  </span>
+                )}
               </div>
             </div>
           </div>
           <div className="p-1.5">
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setIsOpen(false)}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer mb-1"
+              >
+                <ShieldCheck className="size-4" />
+                Admin Dashboard
+              </Link>
+            )}
             <button
               onClick={() => {
                 setIsOpen(false)
@@ -333,6 +351,7 @@ export default function ProjectsDashboard() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [userName, setUserName] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
@@ -350,9 +369,19 @@ export default function ProjectsDashboard() {
 
   useEffect(() => {
     fetchProjects()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserEmail(user?.email ?? '')
-      setUserName((user?.user_metadata?.full_name as string) ?? '')
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (user) {
+        setUserEmail(user.email ?? '')
+        setUserName((user.user_metadata?.full_name as string) ?? '')
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single()
+        if (profile?.is_admin) {
+          setIsAdmin(true)
+        }
+      }
     })
   }, [fetchProjects, supabase])
 
@@ -493,11 +522,21 @@ export default function ProjectsDashboard() {
           <BrandLockup textSize="text-base" variant="auto" />
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:border-ring/40 hover:text-foreground hover:bg-muted cursor-pointer"
+            >
+              <ShieldCheck className="size-4 text-ring" />
+              <span>Admin View</span>
+            </Link>
+          )}
           <ThemeToggle />
           <UserProfileDropdown
             userName={userName}
             userEmail={userEmail}
             initials={initials}
+            isAdmin={isAdmin}
             onLogout={() => setShowLogoutConfirm(true)}
           />
         </div>

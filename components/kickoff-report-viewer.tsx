@@ -1602,7 +1602,7 @@ export function KickoffReportViewer() {
                       <span>{isGeneratingProposal ? 'Generating...' : 'Generate Proposal'}</span>
                     </button>
                   )}
-                  {isAdmin && (
+                  {isAdmin && docType === 'PROPOSAL' && (
                     <SendProposalDialog
                       projectId={projectId}
                       reportMarkdown={reportMarkdown}
