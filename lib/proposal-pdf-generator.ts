@@ -1,0 +1,201 @@
+import { jsPDF } from 'jspdf'
+
+export interface ProjectData {
+  project_name: string
+  subtitle?: string
+  estimated_cost: string
+  estimated_timeline: string
+  sections: Section[]
+}
+
+export interface Section {
+  heading: string
+  text?: string
+  bullets?: (string | BulletItem)[]
+}
+
+export interface BulletItem {
+  label: string
+  text: string
+}
+
+/**
+ * Generate a professional proposal PDF
+ * @param projectData - Project information and scope details
+ * @returns PDF as a Buffer
+ */
+export function generateProposalPDF(projectData: ProjectData): Buffer {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  })
+
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 20
+  const contentWidth = pageWidth - margin * 2
+
+  let yPos = margin
+
+  // ─── TITLE ───
+  doc.setFontSize(24)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(26, 35, 64) // Navy
+  const titleLines = doc.splitTextToSize(
+    `Project Proposal: ${projectData.project_name}`,
+    contentWidth
+  )
+  doc.text(titleLines, margin, yPos)
+  yPos += titleLines.length * 10 + 8
+
+  // Subtitle if provided
+  if (projectData.subtitle) {
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 110, 130) // Gray
+    const subtitleLines = doc.splitTextToSize(projectData.subtitle, contentWidth)
+    doc.text(subtitleLines, margin, yPos)
+    yPos += subtitleLines.length * 6 + 8
+  }
+
+  // ─── DIVIDER ───
+  doc.setDrawColor(45, 110, 245) // Electric blue
+  doc.setLineWidth(0.5)
+  doc.line(margin, yPos, pageWidth - margin, yPos)
+  yPos += 10
+
+  // ─── PROJECT ESTIMATES BOX ───
+  const estimateBoxHeight = 30
+  const estimateBoxY = yPos
+
+  // Background
+  doc.setFillColor(45, 110, 245) // Electric blue
+  doc.rect(margin, estimateBoxY, contentWidth, estimateBoxHeight, 'F')
+
+  // Text
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(255, 255, 255) // White
+
+  const estimateTextX = margin + 8
+  const leftColX = estimateTextX
+  const rightColX = margin + contentWidth / 2 + 4
+
+  doc.text('Estimated Cost:', leftColX, estimateBoxY + 8)
+  doc.text('Estimated Timeline:', rightColX, estimateBoxY + 8)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(12)
+  doc.text(projectData.estimated_cost, leftColX, estimateBoxY + 18)
+  doc.text(projectData.estimated_timeline, rightColX, estimateBoxY + 18)
+
+  yPos = estimateBoxY + estimateBoxHeight + 12
+
+  // ─── SCOPE OF WORK ───
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(26, 35, 64) // Navy
+  doc.text('Scope of Work (SOW)', margin, yPos)
+  yPos += 10
+
+  // Sections
+  for (const section of projectData.sections) {
+    // Check for page break
+    if (yPos > pageHeight - 30) {
+      doc.addPage()
+      yPos = margin
+    }
+
+    // Section heading
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(45, 110, 245) // Electric blue
+    doc.text(`${section.heading}`, margin, yPos)
+    yPos += 8
+
+    // Section text
+    if (section.text) {
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(55, 65, 81) // Dark gray
+      const textLines = doc.splitTextToSize(section.text, contentWidth)
+      doc.text(textLines, margin, yPos)
+      yPos += textLines.length * 5 + 4
+    }
+
+    // Bullets
+    if (section.bullets && section.bullets.length > 0) {
+      doc.setFontSize(10)
+      doc.setTextColor(55, 65, 81)
+
+      for (const bullet of section.bullets) {
+        if (yPos > pageHeight - 15) {
+          doc.addPage()
+          yPos = margin
+        }
+
+        // Bullet point
+        doc.setFont('helvetica', 'normal')
+        const bulletSymbol = '•'
+        const bulletX = margin + 3
+        const textX = margin + 8
+
+        if (typeof bullet === 'string') {
+          // Plain bullet
+          const bulletLines = doc.splitTextToSize(bullet, contentWidth - 8)
+          doc.text(bulletSymbol, bulletX, yPos)
+          doc.text(bulletLines, textX, yPos)
+          yPos += bulletLines.length * 5 + 2
+        } else {
+          // Bold label + text bullet
+          doc.setFont('helvetica', 'bold')
+          doc.text(bulletSymbol, bulletX, yPos)
+          doc.text(`${bullet.label}: `, textX, yPos)
+
+          const labelWidth = doc.getTextWidth(`${bullet.label}: `)
+          doc.setFont('helvetica', 'normal')
+
+          // Text wrapping after label
+          const remainingWidth = contentWidth - 8 - labelWidth
+          const textLines = doc.splitTextToSize(bullet.text, remainingWidth)
+          
+          doc.text(textLines, textX + labelWidth, yPos)
+          yPos += textLines.length * 5 + 2
+        }
+      }
+    }
+
+    yPos += 6
+  }
+
+  // ─── FOOTER ───
+  const footerY = pageHeight - 12
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(148, 163, 184) // Light gray
+  doc.text(
+    'Generated by ProjectPilot — from idea to kickoff, instantly.',
+    pageWidth / 2,
+    footerY,
+    { align: 'center' }
+  )
+
+  // Add page numbers
+  const totalPages = doc.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(148, 163, 184)
+    doc.text(
+      `Page ${i} of ${totalPages}`,
+      pageWidth - margin,
+      footerY,
+      { align: 'right' }
+    )
+  }
+
+  // Convert to buffer
+  const pdfBlob = doc.output('blob')
+  return Buffer.from(pdfBlob)
+}

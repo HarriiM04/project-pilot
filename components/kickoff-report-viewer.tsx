@@ -1,10 +1,9 @@
 'use client'
-'use client'
 
 import { useState, useEffect, useRef, ReactNode } from 'react'
 import {
   FileText, Sparkles, CheckCircle2, CircleDashed,
-  Loader2, Download, Zap, FileCheck2, Edit3,
+  Loader2, Download, Zap, FileCheck2, Edit3, Send,
 } from 'lucide-react'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
@@ -12,8 +11,11 @@ import { Button } from '@/components/ui/button'
 import { useDiscovery } from '@/lib/discovery-store'
 import { cn, parseAgencyDetails, type AgencyDetails } from '@/lib/utils'
 import { SendProposalDialog } from '@/components/send-proposal-dialog'
+import { ProposalEditor } from '@/components/proposal-editor'
+import { SendProposalConfirmation } from '@/components/send-proposal-confirmation'
 import { useToast } from '@/components/toast-container'
 import { createClient } from '@/lib/supabase/client'
+import type { SendProposalData } from '@/lib/discovery-store'
 
 gsap.registerPlugin(useGSAP)
 
@@ -32,7 +34,9 @@ function ReportContentFormatter({ markdown }: { markdown: string }) {
   const lines: string[] = []
   let prevEmpty = false
   for (let raw of rawLines) {
-    let cleanRaw = raw.replace(/<br\s*\/?>/gi, '')
+    // Decode HTML entities first
+    const decodedRaw = decodeHtmlEntities(raw)
+    let cleanRaw = decodedRaw.replace(/<br\s*\/?>/gi, '')
     let trimmed = cleanRaw.trim()
     if (trimmed === '') {
       if (!prevEmpty) {
@@ -62,7 +66,7 @@ function ReportContentFormatter({ markdown }: { markdown: string }) {
           {headers.map((h, i) => {
             const cellVal = row[i] || ''
             if (!cellVal) return null
-            
+
             if (cellVal.includes('•')) {
               const parts = cellVal.split('•').map(p => p.trim()).filter(Boolean)
               return (
@@ -183,8 +187,9 @@ function ReportContentFormatter({ markdown }: { markdown: string }) {
 // ── Document Control Constants & Helpers ─────────────────────────────────────
 interface DocMetadata {
   version: string
-  status: 'Draft' | 'Approved'
+  status: 'Draft' | 'Approved' | 'Submitted'
   date: string
+  previously_submitted?: boolean
   version_history: Array<{
     version: string
     date: string
@@ -201,12 +206,64 @@ const toCamelCase = (str: string): string => {
     .join('')
 }
 
+// Decode HTML entities to plain text - works in both browser and server contexts
+function decodeHtmlEntities(text: string): string {
+  if (typeof window !== 'undefined') {
+    // Browser: use textarea trick
+    const textarea = document.createElement('textarea')
+    textarea.innerHTML = text
+    return textarea.value
+  } else {
+    // Server/SSR: use basic string replacement
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+  }
+}
+
+// Convert special characters to PDF-friendly ASCII equivalents
+// This runs ONLY on PDF output - the HTML preview keeps original characters
+function sanitizeForPDF(text: string): string {
+  return text
+    // Replace arrows with ASCII equivalents (critical for jsPDF compatibility)
+    .replace(/\s*→\s*/g, ' -> ')        // Right arrow: → becomes ->
+    .replace(/\s*←\s*/g, ' <- ')        // Left arrow: ← becomes <-
+    .replace(/\s*↓\s*/g, ' [down] ')    // Down arrow
+    .replace(/\s*↑\s*/g, ' [up] ')      // Up arrow
+    .replace(/\s*↔\s*/g, ' <-> ')       // Bidirectional arrow
+    // Replace other problematic Unicode with ASCII safe equivalents
+    .replace(/\s*–\s*/g, '-')           // En dash: – becomes -
+    .replace(/\s*—\s*/g, '-')           // Em dash: — becomes -
+    .replace(/\s*•\s*/g, '* ')          // Bullet: • becomes *
+    .replace(/\s*°\s*/g, ' deg ')       // Degree symbol
+    .replace(/\s*±\s*/g, ' +/- ')       // Plus/minus
+    .replace(/\s*×\s*/g, ' x ')         // Multiplication sign
+    .replace(/\s*÷\s*/g, ' / ')         // Division sign
+    .replace(/\s*≈\s*/g, ' approx ')    // Approximately
+    .replace(/\s*≠\s*/g, ' != ')        // Not equal
+    .replace(/\s*≤\s*/g, ' <= ')        // Less than or equal
+    .replace(/\s*≥\s*/g, ' >= ')        // Greater than or equal
+    .replace(/'/g, "'")                 // Curly left single quote to straight
+    .replace(/'/g, "'")                 // Curly right single quote to straight
+    .replace(/"/g, '"')                 // Curly left double quote to straight
+    .replace(/"/g, '"')                 // Curly right double quote to straight
+    .replace(/…/g, '...')               // Ellipsis: … becomes ...
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const docTypeMap: Record<string, string> = {
   KICKOFF: 'Requirement Summary',
   BRD: 'Business Requirements Document',
   PRD: 'Product Requirements Document',
   SRS: 'Software Requirements Specification',
   SOW: 'Proposed Scope of Work',
+  PROPOSAL: 'Proposal Draft',
 }
 
 const LOGO_SVG = `
@@ -359,9 +416,9 @@ function HTMLVersionHistoryTable({ history }: { history: any[] }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export function KickoffReportViewer() {
-  const { discovery, projectId, isStreaming, messages } = useDiscovery()
+  const { discovery, projectId, isStreaming, messages, proposalId, proposalDraft, proposalStatus, isGeneratingProposal, isSendingProposal, generateProposal, updateProposalDraft, sendProposal } = useDiscovery()
   const { showToast } = useToast()
-  const [docType, setDocType] = useState<'KICKOFF' | 'BRD' | 'PRD' | 'SRS' | 'SOW'>('KICKOFF')
+  const [docType, setDocType] = useState<'KICKOFF' | 'BRD' | 'PRD' | 'SRS' | 'SOW' | 'PROPOSAL'>('KICKOFF')
   const [reportMarkdown, setReportMarkdown] = useState<string | null>(null)
   const [docMetadata, setDocMetadata] = useState<DocMetadata | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -372,6 +429,7 @@ export function KickoffReportViewer() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [agencyBranding, setAgencyBranding] = useState<AgencyDetails | null>(null)
+  const [showSendProposalConfirmation, setShowSendProposalConfirmation] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -412,6 +470,13 @@ export function KickoffReportViewer() {
   useEffect(() => {
     let cancelled = false
     async function checkExisting() {
+      // Skip API call for PROPOSAL tab - it has its own data source
+      if (docType === 'PROPOSAL') {
+        setReportMarkdown(null)
+        setDocMetadata(null)
+        return
+      }
+
       try {
         const res = await fetch(`/api/report?projectId=${projectId}&docType=${docType}`)
         if (res.ok && !cancelled) {
@@ -424,7 +489,7 @@ export function KickoffReportViewer() {
             setDocMetadata(null)
           }
         }
-      } catch { 
+      } catch {
         if (!cancelled) {
           setReportMarkdown(null)
           setDocMetadata(null)
@@ -467,7 +532,7 @@ export function KickoffReportViewer() {
         buf += dec.decode(value, { stream: true })
         setReportMarkdown(buf)
       }
-      
+
       const checkRes = await fetch(`/api/report?projectId=${projectId}&docType=${docType}`)
       if (checkRes.ok) {
         const d = await checkRes.json()
@@ -530,6 +595,12 @@ export function KickoffReportViewer() {
   }, [isStreaming, projectId, docType])
 
   const handleRegenerateClick = async () => {
+    // For PROPOSAL tab, generate proposal instead of report
+    if (docType === 'PROPOSAL') {
+      await handleGenerateProposal()
+      return
+    }
+
     if (docMetadata?.status === 'Approved') {
       const parts = (docMetadata.version || '1.0').split('.')
       let nextVer = '1.1'
@@ -555,7 +626,7 @@ export function KickoffReportViewer() {
         body: JSON.stringify({ projectId, docType })
       })
       if (!res.ok) throw new Error(await res.text() || 'Failed to approve report')
-      
+
       const d = await res.json()
       if (d.success) {
         setDocMetadata(d.report.metadata || null)
@@ -582,7 +653,7 @@ export function KickoffReportViewer() {
         body: JSON.stringify({ projectId, docType: 'KICKOFF', status: 'Submitted' })
       })
       if (!res.ok) throw new Error(await res.text() || 'Failed to submit requirements')
-      
+
       const d = await res.json()
       if (d.success) {
         setDocMetadata(d.report.metadata || null)
@@ -596,8 +667,59 @@ export function KickoffReportViewer() {
     }
   }
 
+  const handleGenerateProposal = async () => {
+    try {
+      // Check all three required docs exist before attempting generation
+      // The generate route requires BRD, PRD, and SOW from extracted_json.docs
+      const missing: string[] = []
+      for (const doc of ['BRD', 'PRD', 'SOW'] as const) {
+        const res = await fetch(`/api/report?projectId=${projectId}&docType=${doc}`)
+        const data = await res.json()
+        if (!data.exists) missing.push(doc)
+      }
+
+      if (missing.length > 0) {
+        showToast(
+          `Missing requirements: Please generate ${missing.join(', ')} first before creating a proposal draft.`,
+          'error'
+        )
+        return
+      }
+
+      await generateProposal()
+      showToast('Proposal draft generated and ready for editing', 'success')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate proposal'
+      console.error('Proposal generation error:', err)
+
+      // Show user-friendly error message
+      showToast(msg, 'error')
+    }
+  }
+
+
+  const handleUpdateProposal = (markdown: string) => {
+    updateProposalDraft(markdown)
+  }
+
+  const handleSendProposal = async (data: SendProposalData) => {
+    try {
+      await sendProposal(data)
+      showToast('Proposal sent successfully!', 'success')
+      setShowSendProposalConfirmation(false)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to send proposal'
+      showToast(msg, 'error')
+    }
+  }
+
   const handleDownload = async () => {
-    if (!reportMarkdown || isDownloading) return
+    // For proposal draft, use proposalDraft; otherwise use reportMarkdown
+    const contentToDownload = (docType === 'KICKOFF' && proposalStatus === 'draft' && proposalDraft)
+      ? proposalDraft
+      : reportMarkdown
+
+    if (!contentToDownload || isDownloading) return
     setIsDownloading(true)
 
     // Animate icon
@@ -612,14 +734,14 @@ export function KickoffReportViewer() {
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
 
-      const pageW    = doc.internal.pageSize.getWidth()
-      const pageH    = doc.internal.pageSize.getHeight()
-      const marginL  = 18
-      const marginR  = 18
-      const marginT  = 32
-      const marginB  = 21
-      const maxW     = pageW - marginL - marginR
-      let   y        = marginT
+      const pageW = doc.internal.pageSize.getWidth()
+      const pageH = doc.internal.pageSize.getHeight()
+      const marginL = 18
+      const marginR = 18
+      const marginT = 32
+      const marginB = 21
+      const maxW = pageW - marginL - marginR
+      let y = marginT
 
       const checkY = (needed: number) => {
         if (y + needed > pageH - marginB) {
@@ -663,7 +785,7 @@ export function KickoffReportViewer() {
         const startX = (pageW - tableW) / 2
         const rowHeight = 8
         const col1W = 45
-        
+
         const versionVal = `v${docMetadata?.version || '1.0'}`
         const statusVal = docMetadata?.status || 'Draft'
         const dateVal = docMetadata?.date || formatDate(new Date())
@@ -690,7 +812,7 @@ export function KickoffReportViewer() {
           }
 
           doc.line(startX, rowY + rowHeight, startX + tableW, rowY + rowHeight)
-          
+
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(9.5)
           doc.setTextColor(30, 41, 59)
@@ -732,7 +854,7 @@ export function KickoffReportViewer() {
             console.error('Failed to render PDF agency logo:', e)
           }
         }
-        
+
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(10)
         doc.setTextColor(26, 35, 64)
@@ -760,13 +882,13 @@ export function KickoffReportViewer() {
       const calculateColWidths = (headers: string[], rows: string[][], tableWidth: number): number[] => {
         const colCount = headers.length
         if (colCount === 0) return []
-        
+
         // 1. Analyze text length for each column
         const colMaxLens = headers.map((h, cIdx) => {
-          let maxLen = h.trim().length
+          let maxLen = decodeHtmlEntities(h.trim()).length
           rows.forEach(row => {
             if (row[cIdx]) {
-              const val = row[cIdx].trim().replace(/\*\*(.*?)\*\*/g, '$1')
+              const val = decodeHtmlEntities(row[cIdx].trim()).replace(/\*\*(.*?)\*\*/g, '$1')
               maxLen = Math.max(maxLen, val.length)
             }
           })
@@ -804,7 +926,7 @@ export function KickoffReportViewer() {
         if (rows.length > 0) {
           const firstRow = rows[0]
           const firstRowLines = firstRow.map((cell, cIdx) => {
-            const txt = (cell || '').trim().replace(/\*\*(.*?)\*\*/g, '$1')
+            const txt = decodeHtmlEntities((cell || '').trim()).replace(/\*\*(.*?)\*\*/g, '$1')
             let cellLines: string[] = []
             if (txt.includes('•')) {
               const parts = txt.split('•').map(p => p.trim()).filter(Boolean)
@@ -834,10 +956,10 @@ export function KickoffReportViewer() {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(fontSize)
         doc.setTextColor(255, 255, 255)
-        
+
         headers.forEach((h, i) => {
           let colStartX = tableStartX + colWidths.slice(0, i).reduce((sum, w) => sum + w, 0)
-          doc.text(h.trim(), colStartX + 2.5, y + headerTextY)
+          doc.text(sanitizeForPDF(decodeHtmlEntities(h.trim())), colStartX + 2.5, y + headerTextY)
         })
 
         // Draw vertical borders for headers
@@ -858,7 +980,7 @@ export function KickoffReportViewer() {
         rows.forEach((row, rIdx) => {
           // Analyze cell lines and determine max row height (splitting inline bullets)
           const cellLinesList = row.map((cell, cIdx) => {
-            const txt = (cell || '').trim().replace(/\*\*(.*?)\*\*/g, '$1')
+            const txt = decodeHtmlEntities((cell || '').trim()).replace(/\*\*(.*?)\*\*/g, '$1')
             let cellLines: string[] = []
             if (txt.includes('•')) {
               const parts = txt.split('•').map(p => p.trim()).filter(Boolean)
@@ -871,10 +993,10 @@ export function KickoffReportViewer() {
             }
             return cellLines
           })
-          
+
           const maxLines = Math.max(...cellLinesList.map(lines => lines.length), 1)
           const rHeight = maxLines * lineSpacing + vertPadding
-          
+
           // Page break check inside table rows
           if (rowY + rHeight > pageH - marginB) {
             // Box the table segment on the current page
@@ -886,7 +1008,7 @@ export function KickoffReportViewer() {
             doc.addPage()
             y = marginT
             rowY = y + hHeight
-            
+
             // Redraw table header on the new page
             doc.setFillColor(26, 35, 64)
             doc.rect(tableStartX, y, tableWidth, hHeight, 'F')
@@ -895,7 +1017,7 @@ export function KickoffReportViewer() {
             doc.setTextColor(255, 255, 255)
             headers.forEach((h, i) => {
               let colStartX = tableStartX + colWidths.slice(0, i).reduce((sum, w) => sum + w, 0)
-              doc.text(h.trim(), colStartX + 2.5, y + headerTextY)
+              doc.text(sanitizeForPDF(decodeHtmlEntities(h.trim())), colStartX + 2.5, y + headerTextY)
             })
 
             // Redraw header vertical dividers
@@ -908,7 +1030,7 @@ export function KickoffReportViewer() {
               }
               hColStartX2 += colW
             })
-            
+
             doc.setFont('helvetica', 'normal')
             doc.setFontSize(fontSize)
           }
@@ -928,7 +1050,7 @@ export function KickoffReportViewer() {
             doc.setTextColor(55, 65, 81)
             const lines = cellLinesList[cIdx]
             lines.forEach((line, lineIdx) => {
-              doc.text(line, colStartX + 2.5, rowY + textStartY + lineIdx * lineSpacing)
+              doc.text(sanitizeForPDF(line), colStartX + 2.5, rowY + textStartY + lineIdx * lineSpacing)
             })
             colStartX += colWidths[cIdx]
           })
@@ -960,11 +1082,13 @@ export function KickoffReportViewer() {
         return rowY
       }
 
-      const rawLines = reportMarkdown.split('\n')
+      const rawLines = contentToDownload.split('\n')
       const lines: string[] = []
       let prevEmpty = false
       for (let raw of rawLines) {
-        let cleanRaw = raw.replace(/<br\s*\/?>/gi, '')
+        // Decode HTML entities first
+        const decodedRaw = decodeHtmlEntities(raw)
+        let cleanRaw = decodedRaw.replace(/<br\s*\/?>/gi, '')
         let trimmed = cleanRaw.trim()
         if (trimmed === '') {
           if (!prevEmpty) {
@@ -1009,11 +1133,11 @@ export function KickoffReportViewer() {
                   doc.setFontSize(9.5)
                   doc.setTextColor(26, 35, 64)
                   doc.text(`${header}:`, marginL, y)
-                  
+
                   doc.setFont('helvetica', 'normal')
                   doc.setTextColor(55, 65, 81)
-                  const cleanVal = cellVal.replace(/\*\*(.*?)\*\*/g, '$1')
-                  
+                  const cleanVal = sanitizeForPDF(decodeHtmlEntities(cellVal)).replace(/\*\*(.*?)\*\*/g, '$1')
+
                   if (cleanVal.includes('•')) {
                     const parts = cleanVal.split('•').map(p => p.trim()).filter(Boolean)
                     y += 4
@@ -1038,7 +1162,7 @@ export function KickoffReportViewer() {
               const headerH = isMultiCol ? 7 : 8
               const minRowH = 12
               checkY(headerH + minRowH)
-              
+
               const endTableY = drawPDFTable(tblHeaders, tblBody, marginL, maxW)
               y = endTableY + 6
             }
@@ -1068,7 +1192,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(15)
           doc.setTextColor(26, 35, 64)
-          const txt = line.slice(2)
+          const txt = sanitizeForPDF(line.slice(2))
           const split = doc.splitTextToSize(txt, maxW)
           doc.text(split, marginL, y)
           y += split.length * 7 + 2
@@ -1094,7 +1218,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(11.5)
           doc.setTextColor(45, 110, 245)
-          const txt = line.slice(3)
+          const txt = sanitizeForPDF(line.slice(3))
           const split = doc.splitTextToSize(txt, maxW)
           doc.text(split, marginL, y)
           y += split.length * 6 + 3
@@ -1108,7 +1232,7 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(10.5)
           doc.setTextColor(26, 35, 64)
-          const txt = line.slice(4)
+          const txt = sanitizeForPDF(line.slice(4))
           const split = doc.splitTextToSize(txt, maxW)
           doc.text(split, marginL, y)
           y += split.length * 5.5 + 2
@@ -1122,8 +1246,8 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(9.5)
           doc.setTextColor(55, 65, 81)
-          const clean = line.slice(2).replace(/\*\*(.*?)\*\*/g, '$1')
-          
+          const clean = sanitizeForPDF(decodeHtmlEntities(line.slice(2))).replace(/\*\*(.*?)\*\*/g, '$1')
+
           if (clean.includes('•')) {
             const parts = clean.split('•').map(p => p.trim()).filter(Boolean)
             parts.forEach(p => {
@@ -1147,8 +1271,8 @@ export function KickoffReportViewer() {
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(9.5)
           doc.setTextColor(55, 65, 81)
-          const clean = line.replace(/\*\*(.*?)\*\*/g, '$1')
-          
+          const clean = sanitizeForPDF(decodeHtmlEntities(line)).replace(/\*\*(.*?)\*\*/g, '$1')
+
           if (clean.includes('•')) {
             const parts = clean.split('•').map(p => p.trim()).filter(Boolean)
             parts.forEach(p => {
@@ -1229,9 +1353,14 @@ export function KickoffReportViewer() {
       }
 
       const camelProjectName = toCamelCase(discovery.projectName || 'ProjectPilot')
-      const filename = docType === 'KICKOFF'
-        ? `RequirementSummary_${camelProjectName}.pdf`
-        : `${docType}_${camelProjectName}.pdf`
+
+      // Use "Proposal" filename when downloading edited proposal draft
+      const isProposal = (docType === 'KICKOFF' && proposalStatus === 'draft' && proposalDraft)
+      const filename = isProposal
+        ? `Proposal_${camelProjectName}.pdf`
+        : docType === 'KICKOFF'
+          ? `RequirementSummary_${camelProjectName}.pdf`
+          : `${docType}_${camelProjectName}.pdf`
 
       let saved = false
       if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
@@ -1248,7 +1377,7 @@ export function KickoffReportViewer() {
           await writable.write(blob)
           await writable.close()
           saved = true
-          showToast(`${docType} report saved successfully`, 'success')
+          showToast(`${isProposal ? 'Proposal' : docType + ' report'} saved successfully`, 'success')
         } catch (err: any) {
           if (err instanceof Error && err.name === 'AbortError') {
             showToast('Download cancelled', 'info')
@@ -1261,7 +1390,7 @@ export function KickoffReportViewer() {
 
       if (!saved) {
         doc.save(filename)
-        showToast(`${docType} report downloaded successfully`, 'success')
+        showToast(`${isProposal ? 'Proposal' : docType + ' report'} downloaded successfully`, 'success')
       }
     } catch (err) {
       console.error('PDF error:', err)
@@ -1276,10 +1405,11 @@ export function KickoffReportViewer() {
 
   const allTabs = [
     { id: 'KICKOFF', label: 'Requirement Summary' },
-    { id: 'BRD',     label: 'BRD' },
-    { id: 'PRD',     label: 'PRD' },
-    { id: 'SRS',     label: 'SRS' },
-    { id: 'SOW',     label: 'SOW' },
+    { id: 'BRD', label: 'BRD' },
+    { id: 'PRD', label: 'PRD' },
+    { id: 'SRS', label: 'SRS' },
+    { id: 'SOW', label: 'SOW' },
+    { id: 'PROPOSAL', label: 'Proposal' },
   ] as const
 
   const docTabs = isAdmin ? allTabs : [allTabs[0]]
@@ -1305,7 +1435,15 @@ export function KickoffReportViewer() {
             <p className="font-mono text-[10px] tracking-widest text-white/40">PREPARING {docType} DOCUMENT</p>
           </div>
         </div>
-      )}      <style>{`
+      )}
+
+      {/* ── Send Proposal Confirmation Dialog ── */}
+      <SendProposalConfirmation
+        open={showSendProposalConfirmation}
+        onOpenChange={setShowSendProposalConfirmation}
+        onConfirm={handleSendProposal}
+        isLoading={isSendingProposal}
+      />      <style>{`
         @media print {
           body, html, #__next, main, section, article {
             height: auto !important; max-height: none !important;
@@ -1339,7 +1477,7 @@ export function KickoffReportViewer() {
                 </span>
               )}
             </div>
-            
+
             {/* Right actions */}
             <div className="flex items-center gap-2">
               {reportMarkdown && (
@@ -1449,6 +1587,21 @@ export function KickoffReportViewer() {
                       <span>Approve Report</span>
                     </button>
                   )}
+                  {/* Generate Proposal Button - Show when BRD, PRD, SOW exist */}
+                  {docType === 'KICKOFF' && !proposalDraft && (
+                    <button
+                      onClick={handleGenerateProposal}
+                      disabled={isGeneratingProposal}
+                      className="flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all active:scale-[0.98]"
+                    >
+                      {isGeneratingProposal ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Send className="size-3" />
+                      )}
+                      <span>{isGeneratingProposal ? 'Generating...' : 'Generate Proposal'}</span>
+                    </button>
+                  )}
                   {isAdmin && (
                     <SendProposalDialog
                       projectId={projectId}
@@ -1504,8 +1657,8 @@ export function KickoffReportViewer() {
                 {isGenerating
                   ? <><Loader2 className="size-3.5 animate-spin" /><span>Synthesizing…</span></>
                   : reportMarkdown
-                  ? <><Sparkles className="size-3.5" /><span>Regenerate</span></>
-                  : <><Zap className="size-3.5" /><span>Generate {docTypeMap[docType]}</span></>
+                    ? <><Sparkles className="size-3.5" /><span>Regenerate</span></>
+                    : <><Zap className="size-3.5" /><span>Generate {docTypeMap[docType]}</span></>
                 }
               </button>
             </div>
@@ -1526,7 +1679,69 @@ export function KickoffReportViewer() {
         )}
 
         {/* Report content or synthesizing loader */}
-        {reportMarkdown !== null ? (
+        {docType === 'PROPOSAL' ? (
+          /* ── PROPOSAL TAB ── */
+          <div className="relative max-md:px-4 p-6 print:hidden">
+            {proposalStatus === 'draft' && proposalDraft && proposalId ? (
+              <div className="rounded-2xl border-2 border-ring/30 bg-gradient-to-br from-primary/5 to-ring/5 p-1 shadow-lg">
+                <div className="rounded-xl bg-background">
+                  <ProposalEditor
+                    projectId={projectId}
+                    proposalId={proposalId}
+                    initialMarkdown={proposalDraft}
+                    onSend={() => setShowSendProposalConfirmation(true)}
+                    isSending={isSendingProposal}
+                    onUpdate={handleUpdateProposal}
+                  />
+                </div>
+              </div>
+            ) : isGeneratingProposal ? (
+              /* Proposal generating loader */
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="relative mb-6">
+                  {/* Outer ring */}
+                  <div className="size-16 rounded-full border-2 border-border" />
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin"
+                    style={{ borderTopColor: '#2d6ef5', borderRightColor: '#6b5ce7', animationDuration: '0.9s' }} />
+                  {/* Centre glow */}
+                  <div className="absolute inset-3 rounded-full animate-pulse"
+                    style={{ background: 'radial-gradient(circle, rgba(45,110,245,0.25) 0%, transparent 70%)' }} />
+                  <Sparkles className="absolute inset-0 m-auto size-5 text-ring" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">
+                  Generating proposal draft...
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground max-w-xs">
+                  Synthesizing BRD, PRD, and SOW into a comprehensive proposal.
+                </p>
+              </div>
+            ) : (
+              /* No proposal yet - show call to action */
+              <div className="flex flex-col items-center justify-center py-24 text-center px-4">
+                <div className="mb-6 flex size-16 items-center justify-center rounded-2xl"
+                  style={{ background: 'linear-gradient(135deg, rgba(45,110,245,0.1), rgba(107,92,231,0.1))' }}>
+                  <FileText className="size-8 text-ring" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-2">No Proposal Draft Yet</h3>
+                <p className="text-sm text-muted-foreground max-w-md mb-6">
+                  Generate a proposal draft from the requirement summary. Make sure BRD, PRD, and SOW are ready first.
+                </p>
+                <button
+                  onClick={handleGenerateProposal}
+                  disabled={isGeneratingProposal}
+                  className="relative flex items-center gap-2 overflow-hidden rounded-xl px-6 py-3 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 cursor-pointer before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-700 hover:before:translate-x-full"
+                  style={{ background: 'linear-gradient(135deg, #1a2340 0%, #2d6ef5 60%, #6b5ce7 100%)' }}
+                >
+                  {isGeneratingProposal ? (
+                    <><Loader2 className="size-4 animate-spin" /><span>Generating...</span></>
+                  ) : (
+                    <><Sparkles className="size-4" /><span>Generate Proposal Draft</span></>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : reportMarkdown !== null ? (
           <div className="relative max-md:px-4 p-6 print:p-0">
             {/* Auto-updating loader overlay */}
             {isGenerating && (
@@ -1574,7 +1789,7 @@ export function KickoffReportViewer() {
                   />
                 )}
 
-                {docType === 'KICKOFF' && agencyBranding && (
+                {(docType === 'KICKOFF') && agencyBranding && (
                   <div className="mb-6 pb-6 border-b border-border/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:border-b print:pb-4 print:mb-4">
                     <div className="flex items-center gap-3">
                       {agencyBranding.logo && (
@@ -1640,13 +1855,13 @@ export function KickoffReportViewer() {
             {/* Checklist items */}
             <div className="space-y-2.5">
               {(discovery.sections || [
-                { key: 'business_goals',    label: 'Business Goals & Objectives',    completion: 0 },
-                { key: 'target_users',      label: 'Target Users & Persona Mapping',  completion: 0 },
-                { key: 'functional_scope',  label: 'Core Functional Scope',           completion: 0 },
+                { key: 'business_goals', label: 'Business Goals & Objectives', completion: 0 },
+                { key: 'target_users', label: 'Target Users & Persona Mapping', completion: 0 },
+                { key: 'functional_scope', label: 'Core Functional Scope', completion: 0 },
                 { key: 'non_functional_reqs', label: 'Non-Functional Reqs & Compliance', completion: 0 },
-                { key: 'constraints',       label: 'Constraints & Tech Stack Fit',    completion: 0 },
+                { key: 'constraints', label: 'Constraints & Tech Stack Fit', completion: 0 },
               ]).map((sec) => {
-                const done    = sec.completion >= 80
+                const done = sec.completion >= 80
                 const partial = sec.completion > 0 && sec.completion < 80
                 return (
                   <div
@@ -1690,8 +1905,8 @@ export function KickoffReportViewer() {
                       style={done
                         ? { background: 'rgba(45,110,245,0.12)', color: '#2d6ef5' }
                         : partial
-                        ? { background: 'rgba(245,158,11,0.12)', color: '#d97706' }
-                        : { background: 'var(--muted)', color: 'var(--muted-foreground)' }
+                          ? { background: 'rgba(245,158,11,0.12)', color: '#d97706' }
+                          : { background: 'var(--muted)', color: 'var(--muted-foreground)' }
                       }
                     >
                       {sec.completion || 0}%
@@ -1704,22 +1919,26 @@ export function KickoffReportViewer() {
             {/* CTA card */}
             <div className="rounded-2xl border border-border/60 bg-card p-5">
               <p className="text-xs text-muted-foreground mb-3">
-                {overallProgress >= 85
-                  ? `Discovery complete — synthesize your ${docTypeMap[docType]} deliverable now.`
-                  : `Chat with Pilot or attach a PDF to advance discovery for ${docTypeMap[docType]}.`
+                {(docType as string) === 'PROPOSAL'
+                  ? 'Generate a comprehensive proposal from your requirement documents.'
+                  : overallProgress >= 85
+                    ? `Discovery complete — synthesize your ${docTypeMap[docType]} deliverable now.`
+                    : `Chat with Pilot or attach a PDF to advance discovery for ${docTypeMap[docType]}.`
                 }
               </p>
               <button
                 onClick={handleRegenerateClick}
-                disabled={isGenerating || isStreaming}
+                disabled={((docType as string) === 'PROPOSAL' ? isGeneratingProposal : isGenerating) || isStreaming}
                 className="relative w-full flex items-center justify-center gap-2 overflow-hidden rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 cursor-pointer before:absolute before:inset-0 before:-translate-x-full before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:transition-transform before:duration-700 hover:before:translate-x-full"
                 style={{ background: 'linear-gradient(135deg, #1a2340 0%, #2d6ef5 60%, #6b5ce7 100%)' }}
               >
-                {isGenerating
+                {((docType as string) === 'PROPOSAL' ? isGeneratingProposal : isGenerating)
                   ? <><Loader2 className="size-4 animate-spin" /><span>Generating…</span></>
                   : docType === 'KICKOFF'
-                  ? <><Sparkles className="size-4" /><span>Get Summary</span></>
-                  : <><Sparkles className="size-4" /><span>Generate {docTypeMap[docType]} Now</span></>
+                    ? <><Sparkles className="size-4" /><span>Get Summary</span></>
+                    : (docType as string) === 'PROPOSAL'
+                      ? <><Sparkles className="size-4" /><span>Generate Proposal Draft</span></>
+                      : <><Sparkles className="size-4" /><span>Generate {docTypeMap[docType]} Now</span></>
                 }
               </button>
             </div>

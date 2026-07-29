@@ -8,11 +8,12 @@ import {
   LayoutDashboard, FolderKanban,
   PanelLeftClose, PanelLeftOpen,
   LayoutGrid, LogOut, Mail,
-  ChevronDown, ShieldCheck, Menu, X,
+  ChevronDown, ShieldCheck, Menu, X, Sparkles,
 } from 'lucide-react'
 import { BrandLockup, BrandMark } from '@/components/brand-logo'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ConfirmationDialog } from '@/components/confirmation-dialog'
+import { AgencyBrandingModal } from '@/components/agency-branding-modal'
 import { useToast } from '@/components/toast-container'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,7 @@ export function AdminShell({ children, userEmail, userName }: AdminShellProps) {
   const [dropdownOpen,   setDropdownOpen]   = useState(false)
   const [logoutOpen,     setLogoutOpen]     = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [brandingOpen,   setBrandingOpen]   = useState(false)
 
   const initials = getInitials(userName || userEmail, userEmail)
   const displayName = userName || userEmail.split('@')[0] || 'Admin'
@@ -213,6 +215,13 @@ export function AdminShell({ children, userEmail, userName }: AdminShellProps) {
                     </div>
                     <div className="p-1.5">
                       <button
+                        onClick={() => { setDropdownOpen(false); setBrandingOpen(true) }}
+                        className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary cursor-pointer mb-1"
+                      >
+                        <Sparkles className="size-4" />
+                        Agency Branding
+                      </button>
+                      <button
                         onClick={() => { setDropdownOpen(false); setLogoutOpen(true) }}
                         className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive cursor-pointer"
                       >
@@ -240,6 +249,11 @@ export function AdminShell({ children, userEmail, userName }: AdminShellProps) {
         confirmLabel="Sign Out"
         onConfirm={handleLogout}
         icon={<LogOut className="size-5 text-muted-foreground" />}
+      />
+
+      <AgencyBrandingModal 
+        open={brandingOpen} 
+        onOpenChange={setBrandingOpen} 
       />
     </div>
   )

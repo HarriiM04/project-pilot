@@ -1,9 +1,15 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { Resend } from 'resend'
-import { marked } from 'marked'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { parseAgencyDetails } from '@/lib/utils'
+import {
+  validateAndFormatCost,
+  validateAndFormatTimeline,
+  sanitizeNextStepsSection,
+  validateEmailTemplate
+} from '@/lib/proposal-parser'
+import { generateProposalEmailHTML, renderEmailTemplate } from '@/lib/proposal-email-template'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -24,29 +30,63 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { projectId, clientEmail, costEstimate, timelineEstimate, reportMarkdown, projectName } = body
+    const { projectId, clientEmail, clientName, costEstimate, timelineEstimate, reportMarkdown, projectName } = body
 
-    if (!projectId || !clientEmail || !reportMarkdown) {
+    if (!projectId || !clientEmail || !reportMarkdown || !projectName) {
       return new Response('Missing required fields', { status: 400 })
     }
 
-    const { data: profile } = await supabase
+    // Validate and format cost
+    let formattedCost = 'TBD'
+    if (costEstimate) {
+      try {
+        formattedCost = validateAndFormatCost(costEstimate)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Invalid cost'
+        return new Response(msg, { status: 400 })
+      }
+    }
+
+    // Validate and format timeline
+    let formattedTimeline = 'TBD'
+    if (timelineEstimate) {
+      try {
+        formattedTimeline = validateAndFormatTimeline(timelineEstimate)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Invalid timeline'
+        return new Response(msg, { status: 400 })
+      }
+    }
+
+    // Bug Fix #3: Sanitize internal notes from report markdown
+    const sanitizedMarkdown = sanitizeNextStepsSection(reportMarkdown)
+
+    // Fetch profile with correct column names that parseAgencyDetails expects
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile } = await (supabase as any)
       .from('profiles')
-      .select('is_admin')
+      .select('is_admin, full_name, avatar_url')
       .eq('id', user.id)
       .single()
     const isAdmin = !!profile?.is_admin
 
+    let agencyDetails: { name: string; logo: string; email?: string } | null = null
     if (isAdmin) {
-      const { data: adminProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-      
-      const agency = parseAgencyDetails(adminProfile)
+      const agency = parseAgencyDetails(profile)
       if (!agency || !agency.name || !agency.logo) {
         return new Response('Agency profile is incomplete. Please set your Agency Name and Logo in Admin settings first.', { status: 400 })
+      }
+      agencyDetails = {
+        name: agency.name,
+        logo: agency.logo,
+        email: agency.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
+      }
+    } else {
+      // Non-admin fallback
+      agencyDetails = {
+        name: 'ProjectPilot',
+        logo: 'https://projectpilot.com/logo.png',
+        email: process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
       }
     }
 
@@ -61,57 +101,57 @@ export async function POST(req: NextRequest) {
       return new Response('Project not found or unauthorized', { status: 403 })
     }
 
-    // Convert markdown to HTML
-    const reportHtml = await marked.parse(reportMarkdown)
+    // Build proposal link and WhatsApp CTA link
+    const proposalLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/workspace/${projectId}`
+    const agencyNameForWA = agencyDetails.name || 'ProjectPilot'
+    const waMessage = `Hey, I'm from ${agencyNameForWA}, let's schedule the kickoff call.`
+    const whatsappLink = `https://wa.me/9265037415?text=${encodeURIComponent(waMessage)}`
 
-    // Build Email HTML
-    let costTimelineHtml = ''
-    if (costEstimate || timelineEstimate) {
-      costTimelineHtml = `
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-          <h3 style="margin-top: 0; color: #0f172a;">Project Estimates</h3>
-          <table style="width: 100%; border-collapse: collapse;">
-            ${costEstimate ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #475569; width: 150px;">Estimated Cost:</td><td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${costEstimate}</td></tr>` : ''}
-            ${timelineEstimate ? `<tr><td style="padding: 8px 0; font-weight: bold; color: #475569; width: 150px;">Estimated Timeline:</td><td style="padding: 8px 0; color: #0f172a;">${timelineEstimate}</td></tr>` : ''}
-          </table>
-        </div>
-      `
+    const emailTemplate = generateProposalEmailHTML({
+      CLIENT_NAME: clientName || 'Valued Client',
+      PROJECT_NAME: projectName,
+      ESTIMATED_TIMELINE: formattedTimeline,
+      ESTIMATED_COST: formattedCost,
+      KEY_DELIVERABLES: 'See attached proposal',
+      PROPOSAL_LINK: proposalLink,
+      WHATSAPP_LINK: whatsappLink,
+      AGENCY_NAME: agencyDetails.name,
+      AGENCY_EMAIL: agencyDetails.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com',
+      PRIMARY_COLOR: '#4F46E5'
+    })
+    const emailHTML = renderEmailTemplate(emailTemplate, {
+      CLIENT_NAME: clientName || 'Valued Client',
+      PROJECT_NAME: projectName,
+      ESTIMATED_TIMELINE: formattedTimeline,
+      ESTIMATED_COST: formattedCost,
+      KEY_DELIVERABLES: 'See attached proposal',
+      PROPOSAL_LINK: proposalLink,
+      WHATSAPP_LINK: whatsappLink,
+      AGENCY_NAME: agencyDetails.name,
+      AGENCY_EMAIL: agencyDetails.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com',
+      PRIMARY_COLOR: '#4F46E5'
+    })
+
+    // Validate template has all placeholders filled
+    const templateValidation = validateEmailTemplate(emailHTML)
+    if (!templateValidation.valid) {
+      console.error('Email template validation failed:', templateValidation.missing)
+      return new Response(`Email template error: missing ${templateValidation.missing.join(', ')}`, { status: 500 })
     }
 
-    const emailHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333;">
-        <h1 style="color: #0f172a; margin-bottom: 24px;">Project Proposal: ${projectName}</h1>
-        
-        <p style="font-size: 16px; line-height: 1.6; color: #475569;">
-          Hello,
-          <br><br>
-          Based on our recent discovery sessions, we have prepared the following proposal and requirements document for your project.
-        </p>
+    // Always send FROM the verified domain (RESEND_FROM_EMAIL).
+    // Resend only allows sending from verified domains — gmail/personal domains will be rejected.
+    // The agency email goes into Reply-To so replies land in the right inbox.
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@projectpilot.com'
+    const replyToEmail = agencyDetails.email || fromEmail
 
-        ${costTimelineHtml}
-
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
-        
-        <div style="font-size: 14px; line-height: 1.6; color: #334155;">
-          ${reportHtml}
-        </div>
-
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
-        
-        <p style="font-size: 14px; color: #64748b; text-align: center;">
-          Sent securely via ProjectPilot
-        </p>
-      </div>
-    `
-
-    const senderEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
-    
     // Send the email
     const { data, error } = await resend.emails.send({
-      from: `ProjectPilot <${senderEmail}>`,
+      from: `${agencyDetails.name} <${fromEmail}>`,
+      replyTo: replyToEmail,
       to: [clientEmail],
       subject: `Project Proposal: ${projectName}`,
-      html: emailHtml,
+      html: emailHTML,
     })
 
     if (error) {
