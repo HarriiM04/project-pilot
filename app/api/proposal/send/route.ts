@@ -15,6 +15,7 @@ import {
   renderEmailTemplate,
   type EmailTemplateVariables,
 } from '@/lib/proposal-email-template'
+import { storeProposalPdf, buildWhatsAppLink } from '@/lib/proposal-actions'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -431,11 +432,8 @@ export async function POST(req: NextRequest) {
     console.log('[PROPOSAL] Premium PDF generated:', pdfBuffer.length, 'bytes')
 
     // ── BUG FIX #4: Use branded HTML template ──
-    const proposalLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/workspace/${projectId}`
-
-    // Build WhatsApp CTA link with URL-encoded prefilled message using brand name
-    const waMessage = `Hey, I'm from ${agencyName}, let's schedule the kickoff call.`
-    const whatsappLink = `https://wa.me/9265037415?text=${encodeURIComponent(waMessage)}`
+    const proposalLink = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/proposal/download/${projectId}`
+    const whatsappLink = buildWhatsAppLink(clientName, project.title || 'Your Project', agencyName)
 
     const emailVariables: EmailTemplateVariables = {
       CLIENT_NAME: clientName,
@@ -489,6 +487,16 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('[PROPOSAL] Email sent successfully (ID:', emailData?.id, ')')
+
+    // ── Store PDF permanently ──
+    let storedPdfPath = null
+    try {
+      const result = await storeProposalPdf(supabase, pdfBuffer, projectId, user.id)
+      storedPdfPath = result.path
+      console.log('[PROPOSAL] PDF stored successfully at:', storedPdfPath)
+    } catch (e) {
+      console.error('[PROPOSAL] Failed to store PDF in Supabase Storage:', e)
+    }
 
     // Update proposal status in database
     const { error: updateError } = await supabase

@@ -120,34 +120,21 @@ export function generateProposalEmailHTML(variables: EmailTemplateVariables): st
           </td>
         </tr>
 
-        <!-- Two CTA buttons side by side -->
+        <!-- CTA Area -->
         <tr>
           <td align="center" style="padding:28px 40px 8px 40px;">
+            <!-- Note replacing the old PDF button -->
+            <p style="margin:0 0 16px 0; font-size:14px; color:#4B5563; font-family:Helvetica, Arial, sans-serif;">
+              Please find the attached PDF file for the full proposal.
+            </p>
+            
+            <!-- CTA: Book Kickoff Call via WhatsApp -->
             <table role="presentation" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <!-- CTA 1: View Proposal PDF -->
-                <td class="cta-cell" align="center" style="padding-right:8px;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td align="center" style="border-radius:8px; background-color:${primary};">
-                        <a href="{{PROPOSAL_LINK}}" style="display:inline-block; padding:13px 24px; font-size:14px; font-weight:bold; color:#FFFFFF; text-decoration:none; font-family:Helvetica, Arial, sans-serif; white-space:nowrap;">
-                          &#128196; View Full Proposal (PDF)
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-                <!-- CTA 2: Book Kickoff Call via WhatsApp -->
-                <td class="cta-cell" align="center" style="padding-left:8px;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td align="center" style="border-radius:8px; background-color:#25D366;">
-                        <a href="{{WHATSAPP_LINK}}" style="display:inline-block; padding:13px 24px; font-size:14px; font-weight:bold; color:#FFFFFF; text-decoration:none; font-family:Helvetica, Arial, sans-serif; white-space:nowrap;">
-                          &#128222; Book Kickoff Call
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
+                <td align="center" style="border-radius:8px; background-color:#25D366;">
+                  <a href="{{WHATSAPP_LINK}}" style="display:inline-block; padding:13px 24px; font-size:14px; font-weight:bold; color:#FFFFFF; text-decoration:none; font-family:Helvetica, Arial, sans-serif; white-space:nowrap;">
+                    &#128222; Book Kickoff Call
+                  </a>
                 </td>
               </tr>
             </table>
