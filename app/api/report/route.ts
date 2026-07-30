@@ -173,6 +173,7 @@ export async function POST(req: NextRequest) {
     const isAdmin = !!profile?.is_admin
 
     // Validate Agency Profile branding for Requirement Summary (KICKOFF)
+    // Removed blocking error to ensure client summary generation is never blocked
     if (docType === 'KICKOFF') {
       const orgId = project.org_id
       let adminProfile = null
@@ -196,9 +197,12 @@ export async function POST(req: NextRequest) {
       }
 
       const agency = parseAgencyDetails(adminProfile)
-      if (!agency || !agency.name || !agency.logo) {
-        return new Response('Agency profile is incomplete. Please upload an Agency Logo and set an Agency Name in the profile settings first.', { status: 400 })
+      // Fallback logic for missing branding assets (logo/name)
+      const agencyDetails = {
+        name: agency?.name || adminProfile?.full_name || 'ProjectPilot',
+        logo: agency?.logo || 'https://projectpilot.com/logo.png',
       }
+      // Note: agencyDetails is ready for future integration in report generation
     }
 
     if (!isAdmin && project.user_id && project.user_id !== user.id) {

@@ -73,13 +73,10 @@ export async function POST(req: NextRequest) {
     let agencyDetails: { name: string; logo: string; email?: string } | null = null
     if (isAdmin) {
       const agency = parseAgencyDetails(profile)
-      if (!agency || !agency.name || !agency.logo) {
-        return new Response('Agency profile is incomplete. Please set your Agency Name and Logo in Admin settings first.', { status: 400 })
-      }
       agencyDetails = {
-        name: agency.name,
-        logo: agency.logo,
-        email: agency.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
+        name: agency?.name || profile?.full_name || 'ProjectPilot',
+        logo: agency?.logo || 'https://projectpilot.com/logo.png',
+        email: agency?.email || process.env.RESEND_FROM_EMAIL || 'hello@projectpilot.com'
       }
     } else {
       // Non-admin fallback
